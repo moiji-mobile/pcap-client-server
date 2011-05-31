@@ -82,14 +82,23 @@ DEFUN(cfg_client_device,
 
 DEFUN(cfg_client_filter,
       cfg_client_filter_cmd,
-      "pcap filter NAME",
+      "pcap filter .NAME",
       PCAP_STRING "filter string in pcap syntax\n" "filter\n")
 {
-	if (osmo_client_filter(pcap_client, argv[0]) != 0) {
-		vty_out(vty, "Failed to set the device.%s", VTY_NEWLINE);
+	char *filter = argv_concat(argv, argc, 0);
+	if (!filter) {
+		vty_out(vty, "Failed to allocate buffer.%s", VTY_NEWLINE);
 		return CMD_WARNING;
 	}
 
+
+	if (osmo_client_filter(pcap_client, filter) != 0) {
+		vty_out(vty, "Failed to set the device.%s", VTY_NEWLINE);
+		talloc_free(filter);
+		return CMD_WARNING;
+	}
+
+	talloc_free(filter);
 	return CMD_SUCCESS;
 }
 

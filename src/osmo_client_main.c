@@ -187,6 +187,13 @@ int main(int argc, char **argv)
 	pcap_client->fd.fd = -1;
 	vty_client_init(pcap_client);
 
+
+	if (vty_read_config_file(config_file, NULL) < 0) {
+		LOGP(DCLIENT, LOGL_ERROR,
+		     "Failed to parse the config file: %s\n", config_file);
+		exit(1);
+	}
+
 	if (daemonize) {
 		rc = osmo_daemonize();
 		if (rc < 0) {

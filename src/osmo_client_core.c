@@ -28,15 +28,57 @@
 #include <limits.h>
 
 
+static int pcap_read_cb(struct osmo_fd *fd, unsigned int what)
+{
+	struct osmo_pcap_client *client = fd->data;
+	struct pcap_pkthdr hdr;
+	const u_char *data;
+
+	data = pcap_next(client->handle, &hdr);
+	if (!data)
+		return -1;
+	printf("GOT a packet: %d %d\n", hdr.caplen, hdr.len);
+	return 0;
+}
+
+static int osmo_install_filter(struct osmo_pcap_client *client)
+{
+	int rc;
+	pcap_freecode(&client->bpf);
+
+	if (!client->handle) {
+		LOGP(DCLIENT, LOGL_NOTICE,
+		    "Filter will only be applied later.\n");
+		return 1;
+	}
+
+	rc = pcap_compile(client->handle, &client->bpf,
+			  client->filter_string, 1, PCAP_NETMASK_UNKNOWN);
+	if (rc != 0) {
+		LOGP(DCLIENT, LOGL_ERROR,
+		     "Failed to compile the filter: %s\n",
+		     pcap_geterr(client->handle));
+		return rc;
+	}
+
+	rc = pcap_setfilter(client->handle, &client->bpf);
+	if (rc != 0) {
+		LOGP(DCLIENT, LOGL_ERROR,
+		     "Failed to set the filter on the interface: %s\n",
+		     pcap_geterr(client->handle));
+		pcap_freecode(&client->bpf);
+		return rc;
+	}
+
+	return rc;
+}
+
 static void free_all(struct osmo_pcap_client *client)
 {
 	if (!client->handle)
 		return;
 
-	if (client->bpf) {
-		pcap_freecode(client->bpf);
-		client->bpf = NULL;
-	}
+	pcap_freecode(&client->bpf);
 
 	if (client->fd.fd != -1) {
 		osmo_fd_unregister(&client->fd);
@@ -49,6 +91,8 @@ static void free_all(struct osmo_pcap_client *client)
 
 int osmo_client_capture(struct osmo_pcap_client *client, const char *device)
 {
+	int fd;
+
 	talloc_free(client->device);
 	free_all(client);
 
@@ -66,10 +110,36 @@ int osmo_client_capture(struct osmo_pcap_client *client, const char *device)
 		return 2;
 	}
 
+	fd = pcap_fileno(client->handle);
+	if (fd == -1) {
+		LOGP(DCLIENT, LOGL_ERROR,
+		     "No file descriptor provided.\n");
+		free_all(client);
+		return 3;
+	}
+
+	client->fd.fd = fd;
+	client->fd.when = BSC_FD_READ;
+	client->fd.cb = pcap_read_cb;
+	client->fd.data = client;
+	if (osmo_fd_register(&client->fd) != 0) {
+		LOGP(DCLIENT, LOGL_ERROR,
+		     "Failed to register the fd.\n");
+		client->fd.fd = -1;
+		free_all(client);
+		return 4;
+	}
+
+	if (client->filter_string) {
+		osmo_install_filter(client);
+	}
+
 	return 0;
 }
 
 int osmo_client_filter(struct osmo_pcap_client *client, const char *filter)
 {
-	return 0;
+	talloc_free(client->filter_string);
+	client->filter_string = talloc_strdup(client, filter);
+	return osmo_install_filter(client);
 }

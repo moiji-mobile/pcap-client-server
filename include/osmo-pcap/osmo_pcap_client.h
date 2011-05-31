@@ -30,7 +30,7 @@ struct osmo_pcap_client {
 	pcap_t *handle;
 	char errbuf[PCAP_ERRBUF_SIZE];
 
-	struct bpf_program *bpf;
+	struct bpf_program bpf;
 	char   *filter_string;
 	int filter_itself;
 
