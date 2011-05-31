@@ -26,4 +26,4 @@ osmopcapconfig.h*
 
 # apps
 src/osmo_pcap_client
-
+src/osmo_pcap_server
