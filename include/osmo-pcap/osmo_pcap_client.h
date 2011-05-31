@@ -22,13 +22,27 @@
 
 #include <pcap.h>
 
+#include <osmocom/core/select.h>
+
 
 struct osmo_pcap_client {
 	char *device;
 	pcap_t *handle;
+	char errbuf[PCAP_ERRBUF_SIZE];
 
 	struct bpf_program *bpf;
 	char   *filter_string;
+	int filter_itself;
+
+	struct osmo_fd fd;
+
+	char *srv_ip;
+	int srv_port;
 };
 
-int vty_client_init();
+extern struct osmo_pcap_client *pcap_client;
+
+int vty_client_init(struct osmo_pcap_client *);
+
+int osmo_client_capture(struct osmo_pcap_client *client, const char *device);
+int osmo_client_filter(struct osmo_pcap_client *client, const char *filter);

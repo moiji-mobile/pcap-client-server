@@ -21,6 +21,7 @@
  */
 
 #include <osmo-pcap/common.h>
+#include <osmo-pcap/osmo_pcap_client.h>
 
 #include <osmocom/core/application.h>
 #include <osmocom/core/process.h>
@@ -46,6 +47,7 @@ static const char *config_file = "osmo-pcap-client.cfg";
 static int daemonize = 0;
 
 void *tall_bsc_ctx;
+struct osmo_pcap_client *pcap_client;
 extern void *tall_msgb_ctx;
 extern void *tall_ctr_ctx;
 
@@ -176,6 +178,14 @@ int main(int argc, char **argv)
 	osmo_init_ignore_signals();
 
 	telnet_init(tall_bsc_ctx, NULL, 4240);
+
+	pcap_client = talloc_zero(tall_bsc_ctx, struct osmo_pcap_client);
+	if (!pcap_client) {
+		LOGP(DCLIENT, LOGL_ERROR, "Failed to allocate osmo_pcap_client.\n");
+		exit(1);
+	}
+	pcap_client->fd.fd = -1;
+	vty_client_init(pcap_client);
 
 	if (daemonize) {
 		rc = osmo_daemonize();
