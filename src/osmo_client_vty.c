@@ -49,16 +49,24 @@ DEFUN(cfg_client,
 static int config_write_client(struct vty *vty)
 {
 	vty_out(vty, "client%s", VTY_NEWLINE);
-	vty_out(vty, " pcap device %s%s",
-		pcap_client->device, VTY_NEWLINE);
-	vty_out(vty, " pcap filter %s%s",
-		pcap_client->filter_string, VTY_NEWLINE);
+
+	if (pcap_client->device)
+		vty_out(vty, " pcap device %s%s",
+			pcap_client->device, VTY_NEWLINE);
+
+	if (pcap_client->filter_string)
+		vty_out(vty, " pcap filter %s%s",
+			pcap_client->filter_string, VTY_NEWLINE);
 	vty_out(vty, " pcap detect-loop %d%s",
 		pcap_client->filter_itself, VTY_NEWLINE);
-	vty_out(vty, " server ip %s%s",
-		pcap_client->srv_ip, VTY_NEWLINE);
-	vty_out(vty, " server port %d%s",
-		pcap_client->srv_port, VTY_NEWLINE);
+
+	if (pcap_client->srv_ip)
+		vty_out(vty, " server ip %s%s",
+			pcap_client->srv_ip, VTY_NEWLINE);
+
+	if (pcap_client->srv_port > 0)
+		vty_out(vty, " server port %d%s",
+			pcap_client->srv_port, VTY_NEWLINE);
 
 	return CMD_SUCCESS;
 }
