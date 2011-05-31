@@ -23,7 +23,18 @@ AC_HEADER_STDC
 
 
 dnl Checks for typedefs, structures and compiler characteristics
+AC_ARG_WITH([pcap-config],
+	AC_HELP_STRING([--with-pcap-config=FILE], [Use given pcap-config]),
+	[pcapcfg="$withval" ],
+	[AC_PATH_PROG([pcapcfg], [pcap-config], [])])
+if test x$pcapcfg = "x"; then
+	AC_MSG_ERROR([pcap-config can not be found])
+fi
 
+PCAP_LIBS=`$pcapcfg --libs`
+PCAP_CFLAGS=`$pcapcfg --cflags`
+AC_SUBST([PCAP_LIBS])
+AC_SUBST([PCAP_CFLAGS])
 
 # Coverage build taken from WebKit's configure.in
 AC_MSG_CHECKING([whether to enable code coverage support])
@@ -42,4 +53,7 @@ fi
 
 dnl Generate the output
 AC_OUTPUT(
+    include/Makefile
+    include/osmo-pcap/Makefile
+    src/Makefile
     Makefile)
