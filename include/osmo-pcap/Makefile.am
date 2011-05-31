@@ -1,1 +1,1 @@
-noinst_HEADERS =
+noinst_HEADERS = common.h

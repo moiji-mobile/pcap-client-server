@@ -50,6 +50,7 @@ if test "$enable_coverage" = "yes"; then
    AC_SUBST([COVERAGE_LDFLAGS])
 fi
 
+AM_CONFIG_HEADER(osmopcapconfig.h)
 
 dnl Generate the output
 AC_OUTPUT(
