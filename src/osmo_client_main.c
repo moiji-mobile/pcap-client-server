@@ -187,12 +187,19 @@ int main(int argc, char **argv)
 	pcap_client->fd.fd = -1;
 	vty_client_init(pcap_client);
 
+	/* initialize the queue */
+	osmo_wqueue_init(&pcap_client->wqueue, 10);
+	pcap_client->wqueue.bfd.fd = -1;
+
 
 	if (vty_read_config_file(config_file, NULL) < 0) {
 		LOGP(DCLIENT, LOGL_ERROR,
 		     "Failed to parse the config file: %s\n", config_file);
 		exit(1);
 	}
+
+	/* attempt to connect to the remote */
+	osmo_client_connect(pcap_client);
 
 	if (daemonize) {
 		rc = osmo_daemonize();

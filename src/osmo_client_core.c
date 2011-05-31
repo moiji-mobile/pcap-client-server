@@ -37,7 +37,8 @@ static int pcap_read_cb(struct osmo_fd *fd, unsigned int what)
 	data = pcap_next(client->handle, &hdr);
 	if (!data)
 		return -1;
-	printf("GOT a packet: %d %d\n", hdr.caplen, hdr.len);
+
+	osmo_client_send_data(client, &hdr, data);
 	return 0;
 }
 
@@ -129,6 +130,8 @@ int osmo_client_capture(struct osmo_pcap_client *client, const char *device)
 		free_all(client);
 		return 4;
 	}
+
+	osmo_client_send_link(client);
 
 	if (client->filter_string) {
 		osmo_install_filter(client);
