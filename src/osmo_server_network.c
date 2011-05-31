@@ -21,6 +21,38 @@
  */
 
 #include <osmo-pcap/osmo_pcap_server.h>
+#include <osmo-pcap/common.h>
+
+#include <osmocom/core/talloc.h>
+
+#include <string.h>
+
+void osmo_pcap_server_delete(struct osmo_pcap_conn *conn)
+{
+	llist_del(&conn->entry);
+	talloc_free(conn);
+}
+
+
+struct osmo_pcap_conn *osmo_pcap_server_find(struct osmo_pcap_server *server,
+					     const char *name)
+{
+	struct osmo_pcap_conn *conn;
+	llist_for_each_entry(conn, &server->conn, entry) {
+		if (strcmp(conn->name, name) == 0)
+			return conn;
+	}
+
+	conn = talloc_zero(server, struct osmo_pcap_conn);
+	if (!conn) {
+		LOGP(DSERVER, LOGL_ERROR,
+		     "Failed to find the connection.\n");
+		return NULL;
+	}
+
+	llist_add_tail(&conn->entry, &server->conn);
+	return conn;
+}
 
 int osmo_pcap_server_listen(struct osmo_pcap_server *server)
 {

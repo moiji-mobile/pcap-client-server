@@ -52,6 +52,8 @@ struct osmo_pcap_conn {
 struct osmo_pcap_server {
 	struct llist_head conn;
 
+	int port;
+	char *addr;
 	struct osmo_fd listen_fd;
 
 	char *base_path;
@@ -62,6 +64,7 @@ extern struct osmo_pcap_server *pcap_server;
 int osmo_pcap_server_listen(struct osmo_pcap_server *server);
 struct osmo_pcap_conn *osmo_pcap_server_find(struct osmo_pcap_server *ser,
 					     const char *name);
+void osmo_pcap_server_delete(struct osmo_pcap_conn *conn);
 void vty_server_init(struct osmo_pcap_server *server);
 
 #endif

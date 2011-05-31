@@ -184,6 +184,7 @@ int main(int argc, char **argv)
 		LOGP(DSERVER, LOGL_ERROR, "Failed to allocate osmo_pcap_server.\n");
 		exit(1);
 	}
+	INIT_LLIST_HEAD(&pcap_server->conn);
 	vty_server_init(pcap_server);
 
 	if (vty_read_config_file(config_file, NULL) < 0) {
