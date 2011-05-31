@@ -72,7 +72,7 @@ enum node_type  osmopcap_go_parent(struct vty *vty)
 		vty->index = NULL;
 		break;
 	default:
-		LOGP(DVTY, LOGL_ERROR, "Unhandled node %d\n", vty->node);
+		vty->node = CONFIG_NODE;
 		break;
 	}
 
