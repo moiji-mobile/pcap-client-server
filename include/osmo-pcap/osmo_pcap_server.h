@@ -26,17 +26,25 @@
 #include <osmocom/core/select.h>
 #include <osmocom/core/linuxlist.h>
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 #include <pcap.h>
 
 #include <time.h>
 
+struct osmo_pcap_server;
+
 struct osmo_pcap_conn {
 	/* list of connections */
 	struct llist_head entry;
+	struct osmo_pcap_server *server;
 
 	/* name */
 	char *name;
 	char *remote_host;
+	struct in_addr remote_addr;
 
 	/* Remote connection */
 	struct osmo_fd rem_fd;

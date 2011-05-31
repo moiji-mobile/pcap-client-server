@@ -107,7 +107,8 @@ DEFUN(cfg_server_client,
 	}
 
 	talloc_free(conn->remote_host);
-	conn->remote_host = talloc_strdup(pcap_server, argv[0]);
+	conn->remote_host = talloc_strdup(pcap_server, argv[1]);
+	inet_aton(argv[1], &conn->remote_addr);
 
 	return CMD_SUCCESS;
 }
