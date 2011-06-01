@@ -188,6 +188,7 @@ static int read_cb(struct osmo_fd *fd, unsigned int what)
 		return -1;
 	}
 
+	data->len = ntohs(data->len);
 	if (data->len > 2000) {
 		LOGP(DSERVER, LOGL_ERROR, "Unplausible result %u\n", data->len);
 		close_connection(conn);

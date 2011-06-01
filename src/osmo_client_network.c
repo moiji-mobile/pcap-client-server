@@ -119,7 +119,7 @@ void osmo_client_send_data(struct osmo_pcap_client *client,
 	msg->l3h = msgb_put(msg, in_hdr->caplen);
 	memcpy(msg->l3h, data, in_hdr->caplen);
 
-	om_hdr->len = msgb_l2len(msg);
+	om_hdr->len = htons(msgb_l2len(msg));
 
 	write_data(client, msg);
 }
@@ -138,7 +138,7 @@ void osmo_client_send_link(struct osmo_pcap_client *client)
 
 	om_hdr = (struct osmo_pcap_data *) msgb_put(msg, sizeof(*om_hdr));
 	om_hdr->type = PKT_LINK_HDR;
-	om_hdr->len = sizeof(*hdr);
+	om_hdr->len = htons(sizeof(*hdr));
 
 	hdr = (struct pcap_file_header *) msgb_put(msg, sizeof(*hdr));
 	hdr->magic = 0xa1b2c3d4;

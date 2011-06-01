@@ -38,8 +38,8 @@
 
 struct osmo_pcap_data {
 	uint8_t type;
-	uint8_t spare[3];
-	uint32_t len;
+	uint8_t spare;
+	uint16_t len;
 	uint8_t data[0];
 } __attribute__((packed));
 
