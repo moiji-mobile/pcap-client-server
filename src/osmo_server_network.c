@@ -38,13 +38,13 @@
 
 static void close_connection(struct osmo_pcap_conn *conn)
 {
-	if (conn->rem_fd.fd != -1) {
+	if (conn->rem_fd.fd >= 0) {
 		close(conn->rem_fd.fd);
 		conn->rem_fd.fd = -1;
 		osmo_fd_unregister(&conn->rem_fd);
 	}
 
-	if (conn->local_fd != -1) {
+	if (conn->local_fd >= 0) {
 		close(conn->local_fd);
 		conn->local_fd = -1;
 	}
