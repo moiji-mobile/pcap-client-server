@@ -171,7 +171,6 @@ int main(int argc, char **argv)
 	/* seed the PRNG */
 	srand(time(NULL));
 
-
 	signal(SIGINT, &signal_handler);
 	signal(SIGABRT, &signal_handler);
 	signal(SIGUSR1, &signal_handler);
