@@ -165,6 +165,7 @@ struct osmo_pcap_conn *osmo_pcap_server_find(struct osmo_pcap_server *server,
 
 	conn->name = talloc_strdup(conn, name);
 	conn->rem_fd.fd = -1;
+	conn->local_fd = -1;
 	conn->server = server;
 	llist_add_tail(&conn->entry, &server->conn);
 	return conn;
