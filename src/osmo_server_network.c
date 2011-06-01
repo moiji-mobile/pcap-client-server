@@ -196,7 +196,8 @@ static int read_cb(struct osmo_fd *fd, unsigned int what)
 
 	rc = read(fd->fd, &data->data[0], data->len);
 	if (rc != data->len) {
-		LOGP(DSERVER, LOGL_ERROR, "Two short packet %d\n", rc);
+		LOGP(DSERVER, LOGL_ERROR,
+		     "Too short packet. Got %d, wanted %d\n", rc, data->len);
 		close_connection(conn);
 		return -1;
 	}
