@@ -46,7 +46,7 @@ static int config_write_server(struct vty *vty)
 	if (pcap_server->addr)
 		vty_out(vty, " server ip %s%s", pcap_server->addr, VTY_NEWLINE);
 	if (pcap_server->port > 0)
-		vty_out(vty, "server port %d%s", pcap_server->port, VTY_NEWLINE);
+		vty_out(vty, " server port %d%s", pcap_server->port, VTY_NEWLINE);
 
 	llist_for_each_entry(conn, &pcap_server->conn, entry) {
 		vty_out(vty, " client %s %s%s",
