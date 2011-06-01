@@ -1,0 +1,18 @@
+Source: osmo-pcap
+Section: unknown
+Priority: extra
+Maintainer: Holger Hans Peter Freyther <zecke@selfish.org>
+Build-Depends: debhelper (>= 7.0.50~), autotools-dev, libpcap0.8-dev
+Standards-Version: 3.9.1
+Homepage: http://openbsc.osmocom.org
+#Vcs-Git: git://git.debian.org/collab-maint/osmo-pcap.git
+#Vcs-Browser: http://git.debian.org/?p=collab-maint/osmo-pcap.git;a=summary
+
+Package: osmo-pcap-client
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Run osmo-pcap-client locally and send traces to a different system.
+
+Package: osmo-pcap-server
+Architecture: all
+Description: Collect traces from other systems.

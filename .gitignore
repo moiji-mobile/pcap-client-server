@@ -5,6 +5,7 @@ Makefile
 Makefile.in
 *.*~
 *.sw?
+*.cfg
 
 #configure
 aclocal.m4
