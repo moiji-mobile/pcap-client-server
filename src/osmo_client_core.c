@@ -85,7 +85,7 @@ static void free_all(struct osmo_pcap_client *client)
 
 	pcap_freecode(&client->bpf);
 
-	if (client->fd.fd != -1) {
+	if (client->fd.fd >= 0) {
 		osmo_fd_unregister(&client->fd);
 		client->fd.fd = -1;
 	}
