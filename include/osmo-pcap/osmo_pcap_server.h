@@ -65,6 +65,7 @@ struct osmo_pcap_server {
 	struct osmo_fd listen_fd;
 
 	char *base_path;
+	off_t max_size;
 };
 
 extern struct osmo_pcap_server *pcap_server;
