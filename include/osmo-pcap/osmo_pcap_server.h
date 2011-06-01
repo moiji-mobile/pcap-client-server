@@ -36,6 +36,10 @@
 
 struct osmo_pcap_server;
 
+
+#define STATE_INITIAL	0
+#define STATE_DATA	1
+
 struct osmo_pcap_conn {
 	/* list of connections */
 	struct llist_head entry;
@@ -55,6 +59,12 @@ struct osmo_pcap_conn {
 
 	/* last time */
 	struct tm last_write;
+
+	/* read buffering */
+	int state;
+	int pend;
+	char buf[4096];
+	struct osmo_pcap_data *data;
 };
 
 struct osmo_pcap_server {

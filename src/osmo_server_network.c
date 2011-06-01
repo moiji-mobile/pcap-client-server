@@ -167,49 +167,76 @@ struct osmo_pcap_conn *osmo_pcap_server_find(struct osmo_pcap_server *server,
 	conn->rem_fd.fd = -1;
 	conn->local_fd = -1;
 	conn->server = server;
+	conn->data = (struct osmo_pcap_data *) &conn->buf[0];
 	llist_add_tail(&conn->entry, &server->conn);
 	return conn;
 }
 
-static int read_cb(struct osmo_fd *fd, unsigned int what)
+static int read_cb_initial(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
 {
-	struct osmo_pcap_data *data;
-	struct osmo_pcap_conn *conn;
-	char buf[4096];
 	int rc;
+	rc = read(fd->fd, conn->buf, sizeof(*conn->data));
 
-	conn = fd->data;
-	data = (struct osmo_pcap_data *) &buf[0];
-
-	rc = read(fd->fd, buf, sizeof(*data));
-	if (rc != sizeof(*data)) {
+	if (rc != sizeof(*conn->data)) {
 		LOGP(DSERVER, LOGL_ERROR, "Failed to read from %s\n", conn->name);
 		close_connection(conn);
 		return -1;
 	}
 
-	data->len = ntohs(data->len);
-	if (data->len > 2000) {
-		LOGP(DSERVER, LOGL_ERROR, "Unplausible result %u\n", data->len);
+	conn->data->len = ntohs(conn->data->len);
+	if (conn->data->len > 2000) {
+		LOGP(DSERVER, LOGL_ERROR, "Unplausible result %u\n", conn->data->len);
 		close_connection(conn);
 		return -1;
 	}
 
-	rc = read(fd->fd, &data->data[0], data->len);
-	if (rc != data->len) {
+	conn->state = STATE_DATA;
+	conn->pend = conn->data->len;
+	return 0;
+}
+
+static int read_cb_data(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
+{
+	int rc;
+	rc = read(fd->fd, &conn->data->data[conn->data->len - conn->pend], conn->pend);
+	if (rc <= 0) {
 		LOGP(DSERVER, LOGL_ERROR,
-		     "Too short packet. Got %d, wanted %d\n", rc, data->len);
+		     "Too short packet. Got %d, wanted %d\n", rc, conn->data->len);
 		close_connection(conn);
 		return -1;
 	}
 
-	switch (data->type) {
-	case PKT_LINK_HDR:
-		link_data(conn, data);
-		break;
-	case PKT_LINK_DATA:
-		write_data(conn, data);
-		break;
+	conn->pend -= rc;
+	if (conn->pend < 0) {
+		LOGP(DSERVER, LOGL_ERROR,
+		     "Someone got the pending read wrong: %d\n", conn->pend);
+		close_connection(conn);
+		return -1;
+	} else if (conn->pend == 0) {
+		conn->state = STATE_INITIAL;
+		switch (conn->data->type) {
+		case PKT_LINK_HDR:
+			link_data(conn, conn->data);
+			break;
+		case PKT_LINK_DATA:
+			write_data(conn, conn->data);
+			break;
+		}
+	}
+
+	return 0;
+}
+
+static int read_cb(struct osmo_fd *fd, unsigned int what)
+{
+	struct osmo_pcap_conn *conn;
+
+	conn = fd->data;
+
+	if (conn->state == STATE_INITIAL) {
+		return read_cb_initial(fd, conn);
+	} else if (conn->state == STATE_DATA) {
+		return read_cb_data(fd, conn);
 	}
 
 	return 0;
@@ -232,6 +259,7 @@ static void new_connection(struct osmo_pcap_server *server,
 	client->rem_fd.data = client;
 	client->rem_fd.when = BSC_FD_READ;
 	client->rem_fd.cb = read_cb;
+	client->state = STATE_INITIAL;
 }
 
 static int accept_cb(struct osmo_fd *fd, unsigned int when)
