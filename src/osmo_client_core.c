@@ -27,6 +27,10 @@
 
 #include <limits.h>
 
+#ifndef PCAP_NETMASK_UNKNOWN
+#define PCAP_NETMASK_UNKNOWN 0xffffffff
+#endif
+
 
 static int pcap_read_cb(struct osmo_fd *fd, unsigned int what)
 {
