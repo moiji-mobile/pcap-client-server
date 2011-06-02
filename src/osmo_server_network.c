@@ -175,23 +175,34 @@ struct osmo_pcap_conn *osmo_pcap_server_find(struct osmo_pcap_server *server,
 static int read_cb_initial(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
 {
 	int rc;
-	rc = read(fd->fd, conn->buf, sizeof(*conn->data));
-
-	if (rc != sizeof(*conn->data)) {
-		LOGP(DSERVER, LOGL_ERROR, "Failed to read from %s\n", conn->name);
+	rc = read(fd->fd, &conn->buf[sizeof(*conn->data) - conn->pend], conn->pend);
+	if (rc <= 0) {
+		LOGP(DSERVER, LOGL_ERROR,
+		     "Too short packet. Got %d, wanted %d\n", rc, conn->data->len);
 		close_connection(conn);
 		return -1;
 	}
 
-	conn->data->len = ntohs(conn->data->len);
-	if (conn->data->len > 2000) {
-		LOGP(DSERVER, LOGL_ERROR, "Unplausible result %u\n", conn->data->len);
+	conn->pend -= rc;
+	if (conn->pend < 0) {
+		LOGP(DSERVER, LOGL_ERROR,
+		     "Someone got the pending read wrong: %d\n", conn->pend);
 		close_connection(conn);
 		return -1;
+	} else if (conn->pend == 0) {
+		conn->data->len = ntohs(conn->data->len);
+
+		if (conn->data->len > 2000) {
+			LOGP(DSERVER, LOGL_ERROR,
+			     "Unplausible result %u\n", conn->data->len);
+			close_connection(conn);
+			return -1;
+		}
+
+		conn->state = STATE_DATA;
+		conn->pend = conn->data->len;
 	}
 
-	conn->state = STATE_DATA;
-	conn->pend = conn->data->len;
 	return 0;
 }
 
@@ -214,6 +225,7 @@ static int read_cb_data(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
 		return -1;
 	} else if (conn->pend == 0) {
 		conn->state = STATE_INITIAL;
+		conn->pend = sizeof(*conn->data);
 		switch (conn->data->type) {
 		case PKT_LINK_HDR:
 			link_data(conn, conn->data);
@@ -260,6 +272,7 @@ static void new_connection(struct osmo_pcap_server *server,
 	client->rem_fd.when = BSC_FD_READ;
 	client->rem_fd.cb = read_cb;
 	client->state = STATE_INITIAL;
+	client->pend = sizeof(*client->data);
 }
 
 static int accept_cb(struct osmo_fd *fd, unsigned int when)
