@@ -1,0 +1,20 @@
+== Todolist for the osmo-pcap system ==
+
+* Have a shared secret between client/server, send the RAND
+  as part of the link type change... use it to decrypt on the
+  server.
+
+* Integrate with logrotate, skip the daily rotate in the client,
+  handle SIGHUP by closing all files... this would be send as
+  a post rotate command.
+
+* Add the end/quit macros to the configure code to the VTY
+  configure commands, this is in OpenBSC but deserve to move
+  to libosmocore or such...
+
+* Add statistics to both the client and the server and make it
+  available through the VTY code.
+
+* Make the max size and rotate file configurable
+
+
