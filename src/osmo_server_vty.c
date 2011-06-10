@@ -47,6 +47,8 @@ static int config_write_server(struct vty *vty)
 		vty_out(vty, " server ip %s%s", pcap_server->addr, VTY_NEWLINE);
 	if (pcap_server->port > 0)
 		vty_out(vty, " server port %d%s", pcap_server->port, VTY_NEWLINE);
+	vty_out(vty, " max-file-size %llu%s",
+		(unsigned long long) pcap_server->max_size, VTY_NEWLINE);
 
 	llist_for_each_entry(conn, &pcap_server->conn, entry) {
 		vty_out(vty, " client %s %s%s",
@@ -94,6 +96,15 @@ DEFUN(cfg_server_port,
 	return CMD_SUCCESS;
 }
 
+DEFUN(cfg_server_max_size,
+      cfg_server_max_size_cmd,
+      "max-file-size NR",
+      "Maximum file size for a trace\n" "Filesize in bytes\n")
+{
+	pcap_server->max_size = strtoull(argv[0], NULL, 10);
+	return CMD_SUCCESS;
+}
+
 DEFUN(cfg_server_client,
       cfg_server_client_cmd,
       "client NAME A.B.C.D",
@@ -138,6 +149,7 @@ void vty_server_init(struct osmo_pcap_server *server)
 	install_element(SERVER_NODE, &cfg_server_base_cmd);
 	install_element(SERVER_NODE, &cfg_server_ip_cmd);
 	install_element(SERVER_NODE, &cfg_server_port_cmd);
+	install_element(SERVER_NODE, &cfg_server_max_size_cmd);
 
 	install_element(SERVER_NODE, &cfg_server_client_cmd);
 	install_element(SERVER_NODE, &cfg_server_no_client_cmd);
