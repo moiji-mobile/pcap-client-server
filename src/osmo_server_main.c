@@ -140,6 +140,9 @@ static void signal_handler(int signal)
 		talloc_report(tall_vty_ctx, stderr);
 		talloc_report_full(tall_bsc_ctx, stderr);
 		break;
+	case SIGHUP:
+		osmo_pcap_server_reopen(pcap_server);
+		break;
 	default:
 		break;
 	}
@@ -175,6 +178,7 @@ int main(int argc, char **argv)
 	signal(SIGABRT, &signal_handler);
 	signal(SIGUSR1, &signal_handler);
 	osmo_init_ignore_signals();
+	signal(SIGHUP, &signal_handler);
 
 	telnet_init(tall_bsc_ctx, NULL, 4241);
 

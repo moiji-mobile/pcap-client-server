@@ -253,6 +253,11 @@ static int read_cb(struct osmo_fd *fd, unsigned int what)
 	conn = fd->data;
 
 	if (conn->state == STATE_INITIAL) {
+		if (conn->reopen) {
+			LOGP(DSERVER, LOGL_INFO, "Reopening log for %s now.\n", conn->name);
+			restart_pcap(conn);
+			conn->reopen = 0;
+		}
 		return read_cb_initial(fd, conn);
 	} else if (conn->state == STATE_DATA) {
 		return read_cb_data(fd, conn);
@@ -335,4 +340,19 @@ int osmo_pcap_server_listen(struct osmo_pcap_server *server)
 	}
 
 	return 0;
+}
+
+void osmo_pcap_server_reopen(struct osmo_pcap_server *server)
+{
+	struct osmo_pcap_conn *conn;
+	LOGP(DSERVER, LOGL_INFO, "Reopening all logfiles.\n");
+	llist_for_each_entry(conn, &server->conn, entry) {
+		/* Write the complete packet out first */
+		if (conn->state == STATE_INITIAL) {
+			restart_pcap(conn);
+		} else {
+			LOGP(DSERVER, LOGL_INFO, "Delaying %s until current packet is complete.\n", conn->name);
+			conn->reopen = 1;
+		}
+	}
 }

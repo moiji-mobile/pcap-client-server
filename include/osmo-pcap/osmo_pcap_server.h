@@ -63,6 +63,7 @@ struct osmo_pcap_conn {
 	/* read buffering */
 	int state;
 	int pend;
+	int reopen;
 	char buf[4096];
 	struct osmo_pcap_data *data;
 };
@@ -80,6 +81,7 @@ struct osmo_pcap_server {
 
 extern struct osmo_pcap_server *pcap_server;
 
+void osmo_pcap_server_reopen(struct osmo_pcap_server *server);
 int osmo_pcap_server_listen(struct osmo_pcap_server *server);
 struct osmo_pcap_conn *osmo_pcap_server_find(struct osmo_pcap_server *ser,
 					     const char *name);
