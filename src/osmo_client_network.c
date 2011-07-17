@@ -163,7 +163,7 @@ void osmo_client_connect(struct osmo_pcap_client *client)
 	osmo_wqueue_clear(&client->wqueue);
 
 	fd = osmo_sock_init(AF_INET, SOCK_STREAM, IPPROTO_TCP,
-			    client->srv_ip, client->srv_port, 0);
+			    client->srv_ip, client->srv_port, OSMO_SOCK_F_CONNECT);
 	if (fd < 0) {
 		LOGP(DCLIENT, LOGL_ERROR,
 		     "Failed to connect to %s:%d\n",

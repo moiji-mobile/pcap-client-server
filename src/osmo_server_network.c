@@ -322,7 +322,7 @@ int osmo_pcap_server_listen(struct osmo_pcap_server *server)
 	int fd;
 
 	fd = osmo_sock_init(AF_INET, SOCK_STREAM, IPPROTO_TCP,
-			    server->addr, server->port, 1);
+			    server->addr, server->port, OSMO_SOCK_F_BIND);
 	if (fd < 0) {
 		LOGP(DSERVER, LOGL_ERROR, "Failed to create the server socket.\n");
 		return -1;
