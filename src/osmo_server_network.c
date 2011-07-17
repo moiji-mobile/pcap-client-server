@@ -62,14 +62,20 @@ static void restart_pcap(struct osmo_pcap_conn *conn)
 		conn->local_fd = -1;
 	}
 
-
 	filename = talloc_asprintf(conn, "%s/trace-%s-%d%.2d%.2d_%.2d%.2d%.2d.pcap",
 				   conn->server->base_path, conn->name,
 				   tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
 				   tm->tm_hour, tm->tm_min, tm->tm_sec);
+
+	if (!filename) {
+		LOGP(DSERVER, LOGL_ERROR, "Failed to assemble filename for %s.\n", conn->name);
+		return;
+	}
+
 	conn->local_fd = creat(filename, 0440);
 	if (conn->local_fd < 0) {
 		LOGP(DSERVER, LOGL_ERROR, "Failed to file: '%s'\n", filename);
+		talloc_free(filename);
 		return;
 	}
 
@@ -78,6 +84,7 @@ static void restart_pcap(struct osmo_pcap_conn *conn)
 		LOGP(DSERVER, LOGL_ERROR, "Failed to write the header: %d\n", errno);
 		close(conn->local_fd);
 		conn->local_fd = -1;
+		talloc_free(filename);
 		return;
 	}
 
