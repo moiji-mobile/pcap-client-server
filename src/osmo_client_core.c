@@ -102,7 +102,7 @@ int osmo_client_capture(struct osmo_pcap_client *client, const char *device)
 	free_all(client);
 
 	client->device = talloc_strdup(client, device);
-	if (!client) {
+	if (!client->device) {
 		LOGP(DCLIENT, LOGL_ERROR, "Failed to copy string.\n");
 		return 1;
 	}
