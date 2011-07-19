@@ -1,0 +1,47 @@
+#! /bin/sh
+
+# Script designed to clean up (zip/delete) old files
+# Adjust the variables below and then copy/symlink this script
+# to /etc/cron/cron.{hourly,daily}
+
+# We want to keep the filenames dated and that confuses logrotate,
+# hence this script.
+
+# Number of pcap files per client
+NUMFILES=8
+ZIPAFTER=3
+VERBOSE=0
+
+# Path where the logfiles reside in
+BASEPATH="/var/lib/osmo-pcap/"
+
+# Find the client names present in basepath
+# Check how many files there are for each client
+# Delete files in excess of NUMFILES
+
+cd "$BASEPATH"
+
+
+do_cleanup()
+{
+	i=1
+	find . -name "trace-$1*" |sort | while read LOG; do
+		if [ $i -gt $NUMFILES ]; then
+			[ $VERBOSE -eq 1 ] && echo "Deleting file \"$LOG\""
+			rm -f "$LOG"
+		elif [ $i -gt $ZIPAFTER ]; then
+				if [ "${LOG##*.}" != "gz" ]; then
+					[ $VERBOSE -eq 1 ] && echo "Compressing file \"$LOG\""
+					gzip "$LOG"
+				fi
+		else
+			[ $VERBOSE -eq 1 ] && echo "Noop for file \"$LOG\""
+		fi
+		i=$(($i+1))
+	done
+}
+
+find . -name "trace-*" |sed -e "s/.*trace-\([^-]\+\).*/\1/" |sort |uniq | while read CLIENT; do
+	[ $VERBOSE -eq 1 ] && echo "Cleaning logs for $CLIENT"
+	do_cleanup "$CLIENT"
+done

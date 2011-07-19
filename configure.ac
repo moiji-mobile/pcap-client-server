@@ -57,4 +57,5 @@ AC_OUTPUT(
     include/Makefile
     include/osmo-pcap/Makefile
     src/Makefile
+    contrib/Makefile
     Makefile)
