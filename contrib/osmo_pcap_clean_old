@@ -7,35 +7,56 @@
 # We want to keep the filenames dated and that confuses logrotate,
 # hence this script.
 
-# Number of pcap files per client
-NUMFILES=8
+# Method used either AGE or FILES
+METHOD="AGE"
+# Maximum age of the logs
+MAXAGE=120
+# Maximum number of logs to keep
+MAXFILES=30
+# Zip all files after the first n files
 ZIPAFTER=3
+# Set to 1 for debug output
 VERBOSE=0
 
 # Path where the logfiles reside in
 BASEPATH="/var/lib/osmo-pcap/"
 
-# Find the client names present in basepath
-# Check how many files there are for each client
-# Delete files in excess of NUMFILES
 
+# Find the client names present in basepath
+# Delete files older than MAXAGE days
+# Zip all but the first ZIPAFTER files
 cd "$BASEPATH"
 
 
-do_cleanup()
+do_cleanup_age()
+{
+	find . -ctime +$MAXAGE -name "trace-$1*" |sort -r | while read LOG; do
+		[ $VERBOSE -eq 1 ] && echo "Deleting file \"$LOG\""
+		rm -f "$LOG"
+	done
+}
+
+do_cleanup_files()
 {
 	i=1
 	find . -name "trace-$1*" |sort -r | while read LOG; do
-		if [ $i -gt $NUMFILES ]; then
+		if [ $i -gt $MAXFILES ]; then
 			[ $VERBOSE -eq 1 ] && echo "Deleting file \"$LOG\""
 			rm -f "$LOG"
-		elif [ $i -gt $ZIPAFTER ]; then
+		fi
+		i=$(($i+1))
+	done
+}
+
+do_zip()
+{
+	i=1
+	find . -name "trace-$1*" |sort -r | while read LOG; do
+		if [ $i -gt $ZIPAFTER ]; then
 				if [ "${LOG##*.}" != "gz" ]; then
 					[ $VERBOSE -eq 1 ] && echo "Compressing file \"$LOG\""
 					gzip "$LOG"
 				fi
-		else
-			[ $VERBOSE -eq 1 ] && echo "Noop for file \"$LOG\""
 		fi
 		i=$(($i+1))
 	done
@@ -43,5 +64,15 @@ do_cleanup()
 
 find . -name "trace-*" |sed -e "s/.*trace-\([^-]\+\).*/\1/" |sort |uniq | while read CLIENT; do
 	[ $VERBOSE -eq 1 ] && echo "Cleaning logs for $CLIENT"
-	do_cleanup "$CLIENT"
+
+	if [ "x$METHOD" == "xAGE" ]; then
+		do_cleanup_age "$CLIENT"
+	elif [ "x$METHOD" == "xFILES" ]; then
+		do_cleanup_files "$CLIENT"
+	else
+		echo "Error, set METHOD to AGE or FILES"
+		exit 1
+	fi
+
+	do_zip "$CLIENT"
 done
