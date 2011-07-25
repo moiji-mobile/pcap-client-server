@@ -25,7 +25,7 @@ cd "$BASEPATH"
 do_cleanup()
 {
 	i=1
-	find . -name "trace-$1*" |sort | while read LOG; do
+	find . -name "trace-$1*" |sort -r | while read LOG; do
 		if [ $i -gt $NUMFILES ]; then
 			[ $VERBOSE -eq 1 ] && echo "Deleting file \"$LOG\""
 			rm -f "$LOG"
