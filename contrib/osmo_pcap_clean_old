@@ -62,7 +62,7 @@ do_zip()
 	done
 }
 
-find . -name "trace-*" |sed -e "s/.*trace-\([^-]\+\).*/\1/" |sort |uniq | while read CLIENT; do
+find . -name "trace-*" |sed -e "s/.*trace-\(.*\)-\(.*\).pcap.*/\1/" |sort |uniq | while read CLIENT; do
 	[ $VERBOSE -eq 1 ] && echo "Cleaning logs for $CLIENT"
 
 	if [ "x$METHOD" == "xAGE" ]; then
