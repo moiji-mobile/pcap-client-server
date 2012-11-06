@@ -14,10 +14,6 @@ AC_PROG_CC
 AC_PROG_INSTALL
 AC_PROG_RANLIB
 
-dnl checks for libraries
-PKG_CHECK_MODULES(LIBOSMOCORE, libosmocore >= 0.3.2)
-PKG_CHECK_MODULES(LIBOSMOVTY, libosmovty >= 0.3.0)
-
 dnl checks for header files
 AC_HEADER_STDC
 
@@ -31,10 +27,26 @@ if test x$pcapcfg = "x"; then
 	AC_MSG_ERROR([pcap-config can not be found])
 fi
 
-PCAP_LIBS=`$pcapcfg --libs`
-PCAP_CFLAGS=`$pcapcfg --cflags`
+dnl CentOS 5 and Debian 6.0 do not ship with a pcap-config and we somehow
+dnl need to support these versions. Once we drop support for these two distros
+dnl the below can be simplified again.
+AC_ARG_VAR([PCAP_LIBS], [PCAP library files])
+AC_ARG_VAR([PCAP_CFLAGS], [PCAP C compiler flags])
+
+if test "x$ac_cv_env_PCAP_LIBS_set" != "xset"; then
+	PCAP_LIBS=`$pcapcfg --libs`
+fi
+
+if test "x$ac_cv_env_PCAP_CFLAGS_set" != "xset"; then
+	PCAP_CFLAGS=`$pcapcfg --cflags`
+fi
 AC_SUBST([PCAP_LIBS])
 AC_SUBST([PCAP_CFLAGS])
+
+dnl checks for libraries
+PKG_CHECK_MODULES(LIBOSMOCORE, libosmocore >= 0.3.2)
+PKG_CHECK_MODULES(LIBOSMOVTY, libosmovty >= 0.3.0)
+
 
 # Coverage build taken from WebKit's configure.in
 AC_MSG_CHECKING([whether to enable code coverage support])
