@@ -1,3 +1,9 @@
+osmo-pcap (0.0.5) UNRELEASED; urgency=low
+
+  * Add init script for the osmo-pcap tool 
+
+ -- Holger Hans Peter Freyther <holger@freyther.de>  Wed, 10 Apr 2013 18:35:21 +0200
+
 osmo-pcap (0.0.4) unstable; urgency=low
 
   * New upstream version.
