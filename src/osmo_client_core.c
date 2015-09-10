@@ -43,9 +43,6 @@
 #define UDP_LEN		sizeof(struct udphdr)
 #define NS_LEN		1
 
-static int saw_llc = 0;
-static int failed_to_parse = 0;
-
 static int check_gprs(const u_char *data, bpf_u_int32 len)
 {
 	struct tlv_parsed tp;
