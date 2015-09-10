@@ -36,6 +36,7 @@ struct osmo_pcap_client {
 	struct bpf_program bpf;
 	char   *filter_string;
 	int filter_itself;
+	int gprs_filtering;
 	struct osmo_fd fd;
 
 	char *srv_ip;

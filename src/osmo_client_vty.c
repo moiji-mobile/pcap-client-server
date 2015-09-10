@@ -59,6 +59,8 @@ static int config_write_client(struct vty *vty)
 			pcap_client->filter_string, VTY_NEWLINE);
 	vty_out(vty, " pcap detect-loop %d%s",
 		pcap_client->filter_itself, VTY_NEWLINE);
+	if (pcap_client->gprs_filtering)
+		vty_out(vty, " pcap add-filter gprs%s", VTY_NEWLINE);
 
 	if (pcap_client->srv_ip)
 		vty_out(vty, " server ip %s%s",
@@ -77,6 +79,24 @@ DEFUN(cfg_client_device,
       PCAP_STRING "the device to filter\n" "device name\n")
 {
 	osmo_client_capture(pcap_client, argv[0]);
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_client_add_gprs,
+      cfg_client_add_gprs_cmd,
+      "pcap add-filter gprs",
+      PCAP_STRING "Add-filter\n" "Custom filtering for GPRS\n")
+{
+	pcap_client->gprs_filtering = 1;
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_client_del_gprs,
+      cfg_client_del_gprs_cmd,
+      "no pcap add-filter gprs",
+      NO_STR PCAP_STRING "Add-filter\n" "Custom filter for GPRS\n")
+{
+	pcap_client->gprs_filtering = 0;
 	return CMD_SUCCESS;
 }
 
@@ -143,6 +163,9 @@ int vty_client_init(struct osmo_pcap_client *pcap)
 
 	install_element(CLIENT_NODE, &cfg_server_ip_cmd);
 	install_element(CLIENT_NODE, &cfg_server_port_cmd);
+
+	install_element(CLIENT_NODE, &cfg_client_add_gprs_cmd);
+	install_element(CLIENT_NODE, &cfg_client_del_gprs_cmd);
 
 	return 0;
 }

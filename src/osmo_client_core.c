@@ -20,16 +20,132 @@
  *
  */
 
+#define _BSD_SOURCE
 #include <osmo-pcap/osmo_pcap_client.h>
 #include <osmo-pcap/common.h>
 
+#include <osmocom/gprs/gprs_bssgp.h>
+#include <osmocom/gprs/protocol/gsm_08_16.h>
+#include <osmocom/gprs/protocol/gsm_08_18.h>
+
 #include <osmocom/core/talloc.h>
+
+#include <netinet/ip.h>
+#include <netinet/udp.h>
 
 #include <limits.h>
 
 #ifndef PCAP_NETMASK_UNKNOWN
 #define PCAP_NETMASK_UNKNOWN 0xffffffff
 #endif
+
+#define IP_LEN		sizeof(struct ip)
+#define UDP_LEN		sizeof(struct udphdr)
+#define NS_LEN		1
+
+static int saw_llc = 0;
+static int failed_to_parse = 0;
+
+static int check_gprs(const u_char *data, bpf_u_int32 len)
+{
+	struct tlv_parsed tp;
+	struct gprs_ns_hdr *hdr = (struct gprs_ns_hdr *) data;
+	struct bssgp_ud_hdr *bssgp_hdr;
+	uint8_t llc_sapi;
+
+	switch (hdr->pdu_type) {
+	case NS_PDUT_UNITDATA:
+		break;
+	default:
+		return 1;
+	}
+
+	len -= sizeof(*hdr);
+
+	/* NS_PDUT_UNITDATA from here.. */
+	/* skip NS SDU control bits and BVCI */
+	if (len < 3)
+		return 1;
+	len -= 3;
+
+	/* Check if the BSSGP UD hdr fits */
+	if (len < sizeof(*bssgp_hdr))
+		return 1;
+	bssgp_hdr = (struct bssgp_ud_hdr *) &hdr->data[3];
+
+	/* We only need to check UL/DL messages for the sapi */
+	if (bssgp_hdr->pdu_type != BSSGP_PDUT_DL_UNITDATA
+		&& bssgp_hdr->pdu_type != BSSGP_PDUT_UL_UNITDATA)
+		return 1;
+	len -= sizeof(*bssgp_hdr);
+
+	/* now parse the rest of the IEs */
+	memset(&tp, 0, sizeof(tp));
+	if (bssgp_tlv_parse(&tp, &bssgp_hdr->data[0], len) < 0)
+		return 1;
+
+	if (!TLVP_PRESENT(&tp, BSSGP_IE_LLC_PDU))
+		return 1;
+	if (TLVP_LEN(&tp, BSSGP_IE_LLC_PDU) < 1)
+		return 1;
+
+	llc_sapi = TLVP_VAL(&tp, BSSGP_IE_LLC_PDU)[0] & 0x0f;
+	/* Skip user data 3, 5, 9, 11 */
+	if (llc_sapi == 3 || llc_sapi == 5 || llc_sapi == 9 || llc_sapi == 11)
+		return 0;
+	return 1;
+}
+
+static int forward_packet(
+			struct osmo_pcap_client *client,
+			struct pcap_pkthdr *hdr,
+			const u_char *data)
+{
+	int ll_type;
+	int offset;
+	struct ip *ip_hdr;
+	const u_char *ip_data;
+	const u_char *udp_data;
+	const u_char *payload_data;
+	bpf_u_int32 payload_len;
+
+	if (!client->gprs_filtering)
+		return 1;
+
+	ll_type = pcap_datalink(client->handle);
+	switch (ll_type) {
+	case DLT_EN10MB:
+		offset = 14;
+		break;
+	case DLT_LINUX_SLL:
+		offset = 16;
+		break;
+	default:
+		LOGP(DCLIENT, LOGL_ERROR, "LL type %d/%s not handled.\n",
+			ll_type, pcap_datalink_val_to_name(ll_type));
+		return 1;
+	}
+
+	/* Check if this can be a full UDP frame with NS */
+	if (offset + IP_LEN + UDP_LEN + NS_LEN > hdr->caplen)
+		return 1;
+
+	ip_data = data + offset;
+	ip_hdr = (struct ip *) ip_data;
+
+	/* Only handle IPv4 */
+	if (ip_hdr->ip_v != 4)
+		return 1;
+	/* Only handle UDP */
+	if (ip_hdr->ip_p != 17)
+		return 1;
+
+	udp_data = ip_data + IP_LEN;
+	payload_data = udp_data + UDP_LEN;
+	payload_len = hdr->caplen - offset - IP_LEN - UDP_LEN;
+
+	return check_gprs(payload_data, payload_len);
+}
 
 
 static int pcap_read_cb(struct osmo_fd *fd, unsigned int what)
@@ -41,6 +157,9 @@ static int pcap_read_cb(struct osmo_fd *fd, unsigned int what)
 	data = pcap_next(client->handle, &hdr);
 	if (!data)
 		return -1;
+
+	if (!forward_packet(client, &hdr, data))
+		return 0;
 
 	osmo_client_send_data(client, &hdr, data);
 	return 0;
