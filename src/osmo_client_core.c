@@ -70,6 +70,11 @@ static int check_gprs(const u_char *data, bpf_u_int32 len)
 		return 1;
 	bssgp_hdr = (struct bssgp_ud_hdr *) &hdr->data[3];
 
+	/* BVC flow control is creating too much noise. Drop it  */
+	if (bssgp_hdr->pdu_type == BSSGP_PDUT_FLOW_CONTROL_BVC
+		|| bssgp_hdr->pdu_type == BSSGP_PDUT_FLOW_CONTROL_BVC_ACK)
+		return 0;
+
 	/* We only need to check UL/DL messages for the sapi */
 	if (bssgp_hdr->pdu_type != BSSGP_PDUT_DL_UNITDATA
 		&& bssgp_hdr->pdu_type != BSSGP_PDUT_UL_UNITDATA)
