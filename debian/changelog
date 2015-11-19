@@ -1,3 +1,9 @@
+osmo-pcap (0.0.7) unstable; urgency=medium
+
+  * gprs: Do not collect BVC FLOW CONTROL / ACK messages
+
+ -- Holger Hans Peter Freyther <holger@moiji-mobile.com>  Thu, 19 Nov 2015 11:13:55 +0100
+
 osmo-pcap (0.0.6) unstable; urgency=medium
 
   [ Holger Hans Peter Freyther ]
