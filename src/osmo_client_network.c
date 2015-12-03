@@ -100,7 +100,7 @@ void osmo_client_send_data(struct osmo_pcap_client *client,
 			   struct pcap_pkthdr *in_hdr, const uint8_t *data)
 {
 	struct osmo_pcap_data *om_hdr;
-	struct pcap_pkthdr *hdr;
+	struct osmo_pcap_pkthdr *hdr;
 	struct msgb *msg;
 
 	if (in_hdr->caplen > 9000) {
@@ -119,8 +119,11 @@ void osmo_client_send_data(struct osmo_pcap_client *client,
 	om_hdr->type = PKT_LINK_DATA;
 
 	msg->l2h = msgb_put(msg, sizeof(*hdr));
-	hdr = (struct pcap_pkthdr *) msg->l2h;
-	*hdr = *in_hdr;
+	hdr = (struct osmo_pcap_pkthdr *) msg->l2h;
+	hdr->ts_sec = in_hdr->ts.tv_sec;
+	hdr->ts_usec = in_hdr->ts.tv_usec;
+	hdr->caplen = in_hdr->caplen;
+	hdr->len = in_hdr->len;
 
 	msg->l3h = msgb_put(msg, in_hdr->caplen);
 	memcpy(msg->l3h, data, in_hdr->caplen);

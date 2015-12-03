@@ -43,4 +43,16 @@ struct osmo_pcap_data {
 	uint8_t data[0];
 } __attribute__((packed));
 
+/**
+ * struct timeval is not the same across different
+ * architectures and for the external format it must
+ * be a 32bit value. We have a 2038 issue here?
+ */
+struct osmo_pcap_pkthdr {
+        uint32_t ts_sec;
+        uint32_t ts_usec;
+	uint32_t caplen;
+	uint32_t len;
+} __attribute__((packed));
+
 #endif
