@@ -103,7 +103,13 @@ void osmo_client_send_data(struct osmo_pcap_client *client,
 	struct pcap_pkthdr *hdr;
 	struct msgb *msg;
 
-	msg = msgb_alloc(4096, "data-data");
+	if (in_hdr->caplen > 9000) {
+		LOGP(DCLIENT, LOGL_ERROR,
+			"Capture len too big %zu\n", in_hdr->caplen);
+		return;
+	}
+
+	msg = msgb_alloc(9000 + sizeof(*om_hdr) + sizeof(*hdr), "data-data");
 	if (!msg) {
 		LOGP(DCLIENT, LOGL_ERROR, "Failed to allocate.\n");
 		return;
@@ -128,8 +134,9 @@ void osmo_client_send_link(struct osmo_pcap_client *client)
 {
 	struct pcap_file_header *hdr;
 	struct osmo_pcap_data *om_hdr;
+	struct msgb *msg;
 
-	struct msgb *msg = msgb_alloc(4096, "link-data");
+	msg = msgb_alloc(9000 + sizeof(*om_hdr) + sizeof(*hdr), "link-data");
 	if (!msg) {
 		LOGP(DCLIENT, LOGL_ERROR, "Failed to allocate data.\n");
 		return;

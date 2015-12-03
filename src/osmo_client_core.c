@@ -228,7 +228,7 @@ int osmo_client_capture(struct osmo_pcap_client *client, const char *device)
 		return 1;
 	}
 
-	client->handle = pcap_open_live(client->device, 2000, 0,
+	client->handle = pcap_open_live(client->device, 9000, 0,
 					1000, client->errbuf);
 	if (!client->handle) {
 		LOGP(DCLIENT, LOGL_ERROR,
