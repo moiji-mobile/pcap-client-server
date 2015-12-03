@@ -23,6 +23,8 @@
 #ifndef OSMO_PCAP_SERVER_H
 #define OSMO_PCAP_SERVER_H
 
+#include "wireformat.h"
+
 #include <osmocom/core/select.h>
 #include <osmocom/core/linuxlist.h>
 
@@ -39,6 +41,8 @@ struct osmo_pcap_server;
 
 #define STATE_INITIAL	0
 #define STATE_DATA	1
+
+#define SERVER_MAX_DATA_SIZE 10000
 
 struct osmo_pcap_conn {
 	/* list of connections */
@@ -64,7 +68,7 @@ struct osmo_pcap_conn {
 	int state;
 	int pend;
 	int reopen;
-	char buf[4096];
+	char buf[SERVER_MAX_DATA_SIZE + sizeof(struct osmo_pcap_data)];
 	struct osmo_pcap_data *data;
 };
 

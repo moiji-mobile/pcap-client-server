@@ -199,7 +199,7 @@ static int read_cb_initial(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
 	} else if (conn->pend == 0) {
 		conn->data->len = ntohs(conn->data->len);
 
-		if (conn->data->len > 2000) {
+		if (conn->data->len > SERVER_MAX_DATA_SIZE) {
 			LOGP(DSERVER, LOGL_ERROR,
 			     "Implausible data length: %u\n", conn->data->len);
 			close_connection(conn);
