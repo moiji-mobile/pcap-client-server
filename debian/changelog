@@ -1,3 +1,11 @@
+osmo-pcap (0.0.8) unstable; urgency=medium
+
+  * Attempt to work with Jumbo frames up to 9000 bytes
+  * Fix wording in the server error message
+  * Install cron.daily job that can be changed by the user (e.g. max age of the files) 
+
+ -- Holger Hans Peter Freyther <holger@moiji-mobile.com>  Thu, 03 Dec 2015 20:41:24 +0100
+
 osmo-pcap (0.0.7) unstable; urgency=medium
 
   * gprs: Do not collect BVC FLOW CONTROL / ACK messages

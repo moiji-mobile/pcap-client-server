@@ -36,3 +36,6 @@ override_dh_auto_install:
 
 	install -d -m 0755 $(CURDIR)/debian/osmo-pcap-server/etc/osmo-pcap/
 	install -m 0644 $(CURDIR)/contrib/osmo-pcap-server.cfg $(CURDIR)/debian/osmo-pcap-server/etc/osmo-pcap
+
+	install -d -m 0755 $(CURDIR)/debian/osmo-pcap-server/etc/cron.daily/
+	install -m 0755 $(CURDIR)/contrib/osmo_pcap_clean_old $(CURDIR)/debian/osmo-pcap-server/etc/cron.daily/
