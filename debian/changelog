@@ -1,3 +1,9 @@
+osmo-pcap (0.0.9) unstable; urgency=medium
+
+  * Fix pcap packet format for 64bit clients. 
+
+ -- Holger Hans Peter Freyther <holger@moiji-mobile.com>  Thu, 03 Dec 2015 22:17:19 +0100
+
 osmo-pcap (0.0.8) unstable; urgency=medium
 
   * Attempt to work with Jumbo frames up to 9000 bytes
