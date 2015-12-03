@@ -201,7 +201,7 @@ static int read_cb_initial(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
 
 		if (conn->data->len > 2000) {
 			LOGP(DSERVER, LOGL_ERROR,
-			     "Unplausible result %u\n", conn->data->len);
+			     "Implausible data length: %u\n", conn->data->len);
 			close_connection(conn);
 			return -1;
 		}
