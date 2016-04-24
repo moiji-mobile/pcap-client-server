@@ -16,4 +16,4 @@ cd ../../
 autoreconf --install --force
 PCAP_LIBS="-lpcap" PCAP_CFLAGS="" PKG_CONFIG_PATH=$PWD/deps/install/lib/pkgconfig ./configure --with-pcap-config=/bin/true
 PKG_CONFIG_PATH=$PWD/deps/install/lib/pkgconfig $MAKE $PARALLEL_MAKE
-PKG_CONFIG_PATH=$PWD/deps/install/lib/pkgconfig LD_LIBRARY_PATH=$PWD/deps/install/lib $MAKE distcheck
+DISTCHECK_CONFIGURE_FLAGS="--with-pcap-config=/bin/true" PCAP_LIBS="-lpcap" PCAP_CFLAGS="" PKG_CONFIG_PATH=$PWD/deps/install/lib/pkgconfig LD_LIBRARY_PATH=$PWD/deps/install/lib $MAKE distcheck
