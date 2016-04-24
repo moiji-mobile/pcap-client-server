@@ -30,6 +30,7 @@
 
 #include <osmocom/core/talloc.h>
 
+#include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/udp.h>
 
