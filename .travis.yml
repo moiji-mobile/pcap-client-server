@@ -1,0 +1,22 @@
+language: c
+os:
+  - linux
+sudo: required
+addons:
+  apt:
+    packages:
+      - autoconf
+      - automake
+      - make
+      - gcc
+      - debhelper
+      - devscripts
+      - libtool
+      - build-essential
+      - pkg-config
+      - libtalloc-dev
+      - libpcsclite-dev
+      - libpcap-dev
+
+script:
+  - contrib/travis.sh
