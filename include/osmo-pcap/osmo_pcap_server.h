@@ -52,6 +52,7 @@ struct osmo_pcap_conn {
 	/* name */
 	char *name;
 	char *remote_host;
+	int no_store;
 	struct in_addr remote_addr;
 
 	/* Remote connection */

@@ -62,6 +62,12 @@ static void restart_pcap(struct osmo_pcap_conn *conn)
 		conn->local_fd = -1;
 	}
 
+	/* omit any storing/creation of the file */
+	if (conn->no_store) {
+		conn->last_write = *tm;
+		return;
+	}
+
 	filename = talloc_asprintf(conn, "%s/trace-%s-%d%.2d%.2d_%.2d%.2d%.2d.pcap",
 				   conn->server->base_path, conn->name,
 				   tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
@@ -103,7 +109,7 @@ static void link_data(struct osmo_pcap_conn *conn, struct osmo_pcap_data *data)
 	}
 
 	hdr = (struct pcap_file_header *) &data->data[0];
-	if (conn->local_fd < 0) {
+	if (!conn->no_store && conn->local_fd < 0) {
 		conn->file_hdr = *hdr;
 		restart_pcap(conn);
 	} else if (memcmp(&conn->file_hdr, hdr, sizeof(*hdr)) != 0) {
@@ -120,6 +126,11 @@ static void write_data(struct osmo_pcap_conn *conn, struct osmo_pcap_data *data)
 	time_t now = time(NULL);
 	struct tm *tm = localtime(&now);
 	int rc;
+
+	if (conn->no_store) {
+		conn->last_write = *tm;
+		return;
+	}
 
 	if (conn->local_fd < -1) {
 		LOGP(DSERVER, LOGL_ERROR, "No file is open. close connection.\n");

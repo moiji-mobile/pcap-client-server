@@ -1,7 +1,7 @@
 /*
  * osmo-pcap-server code
  *
- * (C) 2011 by Holger Hans Peter Freyther <zecke@selfish.org>
+ * (C) 2011-2016 by Holger Hans Peter Freyther <zecke@selfish.org>
  * (C) 2011 by On-Waves
  * All Rights Reserved
  *
@@ -24,6 +24,8 @@
 #include <osmo-pcap/common.h>
 
 #include <osmocom/core/talloc.h>
+
+#include <unistd.h>
 
 
 #define SERVER_STR "Server settings\n"
@@ -51,8 +53,10 @@ static int config_write_server(struct vty *vty)
 		(unsigned long long) pcap_server->max_size, VTY_NEWLINE);
 
 	llist_for_each_entry(conn, &pcap_server->conn, entry) {
-		vty_out(vty, " client %s %s%s",
-			conn->name, conn->remote_host, VTY_NEWLINE);
+		vty_out(vty, " client %s %s%s%s",
+			conn->name, conn->remote_host,
+			conn->no_store ? " no-store" : "",
+			VTY_NEWLINE);
 	}
 
 	return CMD_SUCCESS;
@@ -107,8 +111,8 @@ DEFUN(cfg_server_max_size,
 
 DEFUN(cfg_server_client,
       cfg_server_client_cmd,
-      "client NAME A.B.C.D",
-      CLIENT_STR "Remote name used in filenames\n" "IP of the remote\n")
+      "client NAME A.B.C.D [no-store]",
+      CLIENT_STR "Remote name used in filenames\n" "IP of the remote\n" "Do not store traffic\n")
 {
 	struct osmo_pcap_conn *conn;
 	conn = osmo_pcap_server_find(pcap_server, argv[0]);
@@ -120,6 +124,16 @@ DEFUN(cfg_server_client,
 	talloc_free(conn->remote_host);
 	conn->remote_host = talloc_strdup(pcap_server, argv[1]);
 	inet_aton(argv[1], &conn->remote_addr);
+
+	/* Checking no-store and maybe closing a pcap file */
+	if (argc >= 3) {
+		if (conn->local_fd >= 0) {
+			close(conn->local_fd);
+			conn->local_fd = -1;
+		}
+		conn->no_store = 1;
+	} else
+		conn->no_store = 0;
 
 	return CMD_SUCCESS;
 }
