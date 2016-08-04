@@ -25,7 +25,11 @@
 
 #include <osmocom/core/talloc.h>
 
+#include <zmq.h>
+
 #include <unistd.h>
+#include <errno.h>
+#include <string.h>
 
 
 #define SERVER_STR "Server settings\n"
@@ -51,6 +55,9 @@ static int config_write_server(struct vty *vty)
 		vty_out(vty, " server port %d%s", pcap_server->port, VTY_NEWLINE);
 	vty_out(vty, " max-file-size %llu%s",
 		(unsigned long long) pcap_server->max_size, VTY_NEWLINE);
+	if (pcap_server->zmq_port > 0)
+		vty_out(vty, " zeromq-publisher %s %d%s",
+			pcap_server->zmq_ip, pcap_server->zmq_port, VTY_NEWLINE);
 
 	llist_for_each_entry(conn, &pcap_server->conn, entry) {
 		vty_out(vty, " client %s %s%s%s",
@@ -154,6 +161,89 @@ DEFUN(cfg_server_no_client,
 	return CMD_SUCCESS;
 }
 
+void destroy_zmq(struct vty *vty)
+{
+	if (pcap_server->zmq_publ) {
+		int rc = zmq_close(pcap_server->zmq_publ);
+		pcap_server->zmq_publ = NULL;
+		if (rc != 0)
+			vty_out(vty, "%%Failed to close publisher rc=%d errno=%d/%s%s",
+				rc, errno, strerror(errno), VTY_NEWLINE);
+	}
+	if (pcap_server->zmq_ctx) {
+		int rc = zmq_ctx_destroy(pcap_server->zmq_ctx);
+		pcap_server->zmq_ctx = NULL;
+		if (rc != 0)
+			vty_out(vty, "%%Failed to destroy ctx rc=%d errno=%d/%s%s",
+				rc, errno, strerror(errno), VTY_NEWLINE);
+	}
+}
+
+DEFUN(cfg_server_zmq_ip_port,
+      cfg_server_zmq_ip_port_cmd,
+      "zeromq-publisher (A.B.C.D|*) <1-65535>",
+      "Enable publishing data to ZeroMQ\n"
+      "Bind to IPv4 address\n" "Bind to wildcard\n"
+      "Bind to port\n")
+{
+	int linger, rc;
+	char *bind_str;
+
+	destroy_zmq(vty);
+	talloc_free(pcap_server->zmq_ip);
+	pcap_server->zmq_ip = talloc_strdup(pcap_server, argv[0]);
+	if (!pcap_server->zmq_ip) {
+		vty_out(vty, "%%Failed to allocate ip string%s", VTY_NEWLINE);
+		return CMD_WARNING;
+	}
+	pcap_server->zmq_port = atoi(argv[1]);
+
+	pcap_server->zmq_ctx = zmq_ctx_new();
+	if (!pcap_server->zmq_ctx) {
+		vty_out(vty, "%%Failed to create zmq ctx%s", VTY_NEWLINE);
+		return CMD_WARNING;
+	}
+	pcap_server->zmq_publ = zmq_socket(pcap_server->zmq_ctx, ZMQ_PUB);
+	if (!pcap_server->zmq_publ) {
+		vty_out(vty, "%%Failed to create zmq publisher%s", VTY_NEWLINE);
+		destroy_zmq(vty);
+		return CMD_WARNING;
+	}
+
+	linger = 0;
+	rc = zmq_setsockopt(pcap_server->zmq_publ, ZMQ_LINGER, &linger, sizeof(linger));
+	if (rc != 0) {
+		vty_out(vty, "%%Failed to set linger option rc=%d errno=%d/%s%s",
+			rc, errno, strerror(errno), VTY_NEWLINE);
+		destroy_zmq(vty);
+		return CMD_WARNING;
+	}
+
+	bind_str = talloc_asprintf(pcap_server->zmq_ip, "tcp://%s:%d",
+				pcap_server->zmq_ip, pcap_server->zmq_port);
+	rc = zmq_bind(pcap_server->zmq_publ, bind_str);
+	if (rc != 0) {
+		vty_out(vty, "%%Failed to bind zmq publ rc=%d errno=%d/%s%s",
+			rc, errno, strerror(errno), VTY_NEWLINE);
+		destroy_zmq(vty);
+		talloc_free(bind_str);
+		return CMD_WARNING;
+	}
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_no_server_zmq_ip_port,
+      cfg_no_server_zmq_ip_port_cmd,
+      "no zeromq-publisher",
+      NO_STR "Disable zeromq-publishing\n")
+{
+	destroy_zmq(vty);
+	talloc_free(pcap_server->zmq_ip);
+	pcap_server->zmq_ip = NULL;
+	pcap_server->zmq_port = 0;
+	return CMD_SUCCESS;
+}
+
 void vty_server_init(struct osmo_pcap_server *server)
 {
 	install_element(CONFIG_NODE, &cfg_server_cmd);
@@ -164,6 +254,8 @@ void vty_server_init(struct osmo_pcap_server *server)
 	install_element(SERVER_NODE, &cfg_server_ip_cmd);
 	install_element(SERVER_NODE, &cfg_server_port_cmd);
 	install_element(SERVER_NODE, &cfg_server_max_size_cmd);
+	install_element(SERVER_NODE, &cfg_server_zmq_ip_port_cmd);
+	install_element(SERVER_NODE, &cfg_no_server_zmq_ip_port_cmd);
 
 	install_element(SERVER_NODE, &cfg_server_client_cmd);
 	install_element(SERVER_NODE, &cfg_server_no_client_cmd);

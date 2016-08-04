@@ -17,6 +17,7 @@ addons:
       - libtalloc-dev
       - libpcsclite-dev
       - libpcap-dev
+      - libzmq3-dev
 
 script:
   - contrib/travis.sh

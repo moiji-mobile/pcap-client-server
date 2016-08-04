@@ -80,6 +80,12 @@ struct osmo_pcap_server {
 	char *addr;
 	struct osmo_fd listen_fd;
 
+	/* zeromq handling */
+	int zmq_port;
+	char *zmq_ip;
+	void *zmq_ctx;
+	void *zmq_publ;
+
 	char *base_path;
 	off_t max_size;
 };
