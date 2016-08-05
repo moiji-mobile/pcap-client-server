@@ -1,0 +1,41 @@
+ZeroMQ data protocol v1
+=======================
+
+The osmo-pcap-server can be configured to publish PCAP data to
+zero to many subscribers. The following document describes the
+data format used.
+
+Multiple clients might be connected to the osmo-pcap-server and
+use different link headers depending on the underlying device
+data is being captured from.
+
+The messages published are in two categories. These are client
+events and client data. Client events are generated on connect,
+disconnect, link type change and client data is sent for each
+frame.
+
+Client Events
+^^^^^^^^^^^^^
+
+A multi-part message with event.v1.<EVENT_NAME>.<CLIENT_NAME>
+as the first part followed by textual data will be generated.
+<CLIENT_NAME> is the configured name and <EVENT_NAME> can be
+any of:
+
+	* connect
+	* disconnect
+	* closingtracefile
+
+It might contain more information, such as the filename of the
+tracefile that was closed. There is no guarantee for the order
+and amount of connect/disconnect messages.
+
+
+Client Data
+^^^^^^^^^^^
+
+A multi-part message with data.v1.<CLIENT_NAME> to allow to
+filter for data and a specific client if wanted.
+
+It is followed by the pcap_file_header structure as the second
+part and then the data as third part.

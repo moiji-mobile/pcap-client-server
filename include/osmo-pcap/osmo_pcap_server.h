@@ -58,6 +58,7 @@ struct osmo_pcap_conn {
 	/* Remote connection */
 	struct osmo_fd rem_fd;
 	int local_fd;
+	char *curr_filename;
 
 	/* pcap stuff */
 	struct pcap_file_header file_hdr;
@@ -98,5 +99,6 @@ struct osmo_pcap_conn *osmo_pcap_server_find(struct osmo_pcap_server *ser,
 					     const char *name);
 void osmo_pcap_server_delete(struct osmo_pcap_conn *conn);
 void vty_server_init(struct osmo_pcap_server *server);
+void osmo_pcap_server_close_trace(struct osmo_pcap_conn *conn);
 
 #endif

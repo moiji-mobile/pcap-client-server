@@ -134,10 +134,7 @@ DEFUN(cfg_server_client,
 
 	/* Checking no-store and maybe closing a pcap file */
 	if (argc >= 3) {
-		if (conn->local_fd >= 0) {
-			close(conn->local_fd);
-			conn->local_fd = -1;
-		}
+		osmo_pcap_server_close_trace(conn);
 		conn->no_store = 1;
 	} else
 		conn->no_store = 0;
