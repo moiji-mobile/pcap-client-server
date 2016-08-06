@@ -18,7 +18,3 @@
 * Transport pcaps using TLS and have a non-blocking server.
 
 * Make the max size and rotate file configurable
-
-* Add a streaming option so one can pipe each packet into tshark
-  or a similar utility.
-
