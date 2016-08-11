@@ -18,3 +18,6 @@
 * Transport pcaps using TLS and have a non-blocking server.
 
 * Make the max size and rotate file configurable
+
+* Collect BPF statistics and export them using StatsD, make the
+  StatsD support available in osmo-pcap.
