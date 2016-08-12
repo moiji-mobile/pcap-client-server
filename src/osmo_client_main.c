@@ -24,7 +24,6 @@
 #include <osmo-pcap/osmo_pcap_client.h>
 
 #include <osmocom/core/application.h>
-#include <osmocom/core/process.h>
 #include <osmocom/core/rate_ctr.h>
 #include <osmocom/core/select.h>
 #include <osmocom/core/talloc.h>
