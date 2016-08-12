@@ -44,7 +44,7 @@ enum {
 
 extern const struct log_info log_info;
 extern const char *osmopcap_copyright;
-extern enum node_type osmopcap_go_parent(struct vty *vty);
+extern int osmopcap_go_parent(struct vty *vty);
 extern int osmopcap_is_config_node(struct vty *vty, int node);
 
 #endif

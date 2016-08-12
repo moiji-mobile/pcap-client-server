@@ -63,7 +63,7 @@ const char *osmopcap_copyright =
 	"There is NO WARRANTY, to the extent permitted by law.\r\n";
 
 
-enum node_type  osmopcap_go_parent(struct vty *vty)
+int osmopcap_go_parent(struct vty *vty)
 {
 	switch (vty->node) {
 	case CLIENT_NODE:
