@@ -26,10 +26,12 @@
 #include <osmocom/core/application.h>
 #include <osmocom/core/rate_ctr.h>
 #include <osmocom/core/select.h>
+#include <osmocom/core/stats.h>
 #include <osmocom/core/talloc.h>
 
 #include <osmocom/vty/logging.h>
 #include <osmocom/vty/telnet_interface.h>
+#include <osmocom/vty/stats.h>
 
 #include <pcap.h>
 #include <signal.h>
@@ -164,11 +166,13 @@ int main(int argc, char **argv)
 	vty_info.copyright = osmopcap_copyright;
 	vty_init(&vty_info);
 	logging_vty_add_cmds(&log_info);
+	osmo_stats_vty_add_cmds(&log_info);
 
 	/* parse options */
 	handle_options(argc, argv);
 
 	rate_ctr_init(tall_bsc_ctx);
+	osmo_stats_init(tall_bsc_ctx);
 
 	/* seed the PRNG */
 	srand(time(NULL));
