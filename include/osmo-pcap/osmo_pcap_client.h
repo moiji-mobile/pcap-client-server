@@ -1,7 +1,7 @@
 /*
  * osmo-pcap-client code
  *
- * (C) 2011 by Holger Hans Peter Freyther <zecke@selfish.org>
+ * (C) 2011-2016 by Holger Hans Peter Freyther <holger@moiji-mobile.com>
  * (C) 2011 by On-Waves
  * All Rights Reserved
  *
@@ -27,6 +27,16 @@
 #include <osmocom/core/timer.h>
 #include <osmocom/core/write_queue.h>
 
+struct rate_ctr_group;
+
+enum {
+	CLIENT_CTR_CONNECT,
+	CLIENT_CTR_BYTES,
+	CLIENT_CTR_PKTS,
+	CLIENT_CTR_2BIG,
+	CLIENT_CTR_NOMEM,
+	CLIENT_CTR_QERR,
+};
 
 struct osmo_pcap_client {
 	char *device;
@@ -43,6 +53,9 @@ struct osmo_pcap_client {
 	int srv_port;
 	struct osmo_wqueue wqueue;
 	struct osmo_timer_list timer;
+
+	/* statistics */
+	struct rate_ctr_group *ctrg;
 };
 
 extern struct osmo_pcap_client *pcap_client;

@@ -1,7 +1,7 @@
 /*
  * osmo-pcap-client code
  *
- * (C) 2011 by Holger Hans Peter Freyther <zecke@selfish.org>
+ * (C) 2011-2016 by Holger Hans Peter Freyther <holger@moiji-mobile.com>
  * (C) 2011 by On-Waves
  * All Rights Reserved
  *
@@ -25,6 +25,7 @@
 #include <osmo-pcap/wireformat.h>
 
 #include <osmocom/core/msgb.h>
+#include <osmocom/core/rate_ctr.h>
 #include <osmocom/core/select.h>
 #include <osmocom/core/socket.h>
 
@@ -61,6 +62,7 @@ static void write_data(struct osmo_pcap_client *client, struct msgb *msg)
 {
 	if (osmo_wqueue_enqueue(&client->wqueue, msg) != 0) {
 		LOGP(DCLIENT, LOGL_ERROR, "Failed to enqueue.\n");
+		rate_ctr_inc(&client->ctrg->ctr[CLIENT_CTR_QERR]);
 		msgb_free(msg);
 		return;
 	}
@@ -107,12 +109,14 @@ void osmo_client_send_data(struct osmo_pcap_client *client,
 	if (in_hdr->caplen > 9000) {
 		LOGP(DCLIENT, LOGL_ERROR,
 			"Capture len too big %zu\n", in_hdr->caplen);
+		rate_ctr_inc(&client->ctrg->ctr[CLIENT_CTR_2BIG]);
 		return;
 	}
 
 	msg = msgb_alloc(9000 + sizeof(*om_hdr) + sizeof(*hdr), "data-data");
 	if (!msg) {
 		LOGP(DCLIENT, LOGL_ERROR, "Failed to allocate.\n");
+		rate_ctr_inc(&client->ctrg->ctr[CLIENT_CTR_NOMEM]);
 		return;
 	}
 
@@ -130,6 +134,8 @@ void osmo_client_send_data(struct osmo_pcap_client *client,
 	memcpy(msg->l3h, data, in_hdr->caplen);
 
 	om_hdr->len = htons(msgb_l2len(msg));
+	rate_ctr_add(&client->ctrg->ctr[CLIENT_CTR_BYTES], hdr->caplen);
+	rate_ctr_inc(&client->ctrg->ctr[CLIENT_CTR_PKTS]);
 
 	write_data(client, msg);
 }
@@ -191,5 +197,6 @@ void osmo_client_connect(struct osmo_pcap_client *client)
 		return;
 	}
 
+	rate_ctr_inc(&client->ctrg->ctr[CLIENT_CTR_CONNECT]);
 	osmo_client_send_link(client);
 }

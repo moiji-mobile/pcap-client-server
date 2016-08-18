@@ -52,6 +52,24 @@ struct osmo_pcap_client *pcap_client;
 extern void *tall_msgb_ctx;
 extern void *tall_ctr_ctx;
 
+
+static const struct rate_ctr_desc pcap_client_ctr_desc[] = {
+	[CLIENT_CTR_CONNECT]		= { "server.connect",		"Connects to the server" },
+	[CLIENT_CTR_BYTES]		= { "captured.bytes",		"Captured bytes        " },
+	[CLIENT_CTR_PKTS]		= { "captured.pkts",		"Captured packets      " },
+	[CLIENT_CTR_2BIG]		= { "bpf.too_big",		"Captured data too big " },
+	[CLIENT_CTR_NOMEM]		= { "client.no_mem",		"No memory available   " },
+	[CLIENT_CTR_QERR]		= { "client.queue_err",		"Can not queue data    " },
+};
+
+static const struct rate_ctr_group_desc pcap_client_ctr_group_desc = {
+	.group_name_prefix		= "pcap.client",
+	.group_description		= "PCAP Client statistics",
+	.num_ctr			= ARRAY_SIZE(pcap_client_ctr_desc),
+	.ctr_desc			= pcap_client_ctr_desc,
+	.class_id			= OSMO_STATS_CLASS_GLOBAL,
+};
+
 static struct vty_app_info vty_info = {
 	.name		= "OsmoPCAPClient",
 	.version	= PACKAGE_VERSION,
@@ -198,6 +216,12 @@ int main(int argc, char **argv)
 	osmo_wqueue_init(&pcap_client->wqueue, 10);
 	pcap_client->wqueue.bfd.fd = -1;
 
+	/* initialize the stats interface */
+	pcap_client->ctrg = rate_ctr_group_alloc(pcap_client, &pcap_client_ctr_group_desc, 0);
+	if (!pcap_client->ctrg) {
+		LOGP(DCLIENT, LOGL_ERROR, "Failed to allocate rate ctr\n");
+		exit(1);
+	}
 
 	if (vty_read_config_file(config_file, NULL) < 0) {
 		LOGP(DCLIENT, LOGL_ERROR,
