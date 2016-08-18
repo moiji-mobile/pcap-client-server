@@ -1,7 +1,7 @@
 /*
  * osmo-pcap-client code
  *
- * (C) 2011 by Holger Hans Peter Freyther <zecke@selfish.org>
+ * (C) 2011-2016 by Holger Hans Peter Freyther <holger@moiji-mobile.com>
  * (C) 2011 by On-Waves
  * All Rights Reserved
  *
@@ -180,7 +180,11 @@ int main(int argc, char **argv)
 	signal(SIGUSR1, &signal_handler);
 	osmo_init_ignore_signals();
 
-	telnet_init(tall_bsc_ctx, NULL, 4240);
+	rc = telnet_init(tall_bsc_ctx, NULL, 4240);
+	if (rc < 0) {
+		LOGP(DCLIENT, LOGL_ERROR, "Failed to bind telnet interface\n");
+		exit(1);
+	}
 
 	pcap_client = talloc_zero(tall_bsc_ctx, struct osmo_pcap_client);
 	if (!pcap_client) {
