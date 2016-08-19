@@ -171,6 +171,56 @@ static int pcap_read_cb(struct osmo_fd *fd, unsigned int what)
 	return 0;
 }
 
+static inline u_int P_CAP_UINT_MAX()
+{
+	u_int val = 0;
+	return ~val;
+}
+
+static void add_psbl_wrapped_ctr(struct osmo_pcap_client *client,
+				u_int *old_val, u_int new_val, int ctr)
+{
+	/*
+	 * Wrapped..
+	 * So let's at from N to XYZ_MAX
+	 * and then from 0 to new_val
+	 * Only issue is we don't know sizeof(u_int)
+	 */
+	if (*old_val > new_val) {
+		rate_ctr_add(&client->ctrg->ctr[ctr], P_CAP_UINT_MAX() - *old_val);
+		rate_ctr_add(&client->ctrg->ctr[ctr], new_val);
+		*old_val = new_val;
+		return;
+	}
+
+	/* Just increment it */
+	rate_ctr_add(&client->ctrg->ctr[ctr], new_val - *old_val);
+	*old_val = new_val;
+}
+
+static void pcap_check_stats_cb(void *_client)
+{
+	struct pcap_stat stat;
+	struct osmo_pcap_client *client = _client;
+	int rc;
+
+	/* reschedule */
+	osmo_timer_schedule(&client->pcap_stat_timer, 10, 0);
+
+	memset(&stat, 0, sizeof(stat));
+	rc = pcap_stats(client->handle, &stat);
+	if (rc != 0) {
+		LOGP(DCLIENT, LOGL_ERROR, "Failed to query pcap stats: %s\n",
+			pcap_geterr(client->handle));
+		rate_ctr_inc(&client->ctrg->ctr[CLIENT_CTR_PERR]);
+		return;
+	}
+
+	add_psbl_wrapped_ctr(client, &client->last_ps_recv, stat.ps_recv, CLIENT_CTR_P_RECV);
+	add_psbl_wrapped_ctr(client, &client->last_ps_drop, stat.ps_drop, CLIENT_CTR_P_DROP);
+	add_psbl_wrapped_ctr(client, &client->last_ps_ifdrop, stat.ps_ifdrop, CLIENT_CTR_P_IFDROP);
+}
+
 static int osmo_install_filter(struct osmo_pcap_client *client)
 {
 	int rc;
@@ -216,6 +266,7 @@ static void free_all(struct osmo_pcap_client *client)
 	}
 
 	pcap_close(client->handle);
+	osmo_timer_del(&client->pcap_stat_timer);
 	client->handle = NULL;
 }
 
@@ -259,6 +310,10 @@ int osmo_client_capture(struct osmo_pcap_client *client, const char *device)
 		free_all(client);
 		return 4;
 	}
+
+	client->pcap_stat_timer.data = client;
+	client->pcap_stat_timer.cb = pcap_check_stats_cb;
+	pcap_check_stats_cb(client);
 
 	osmo_client_send_link(client);
 

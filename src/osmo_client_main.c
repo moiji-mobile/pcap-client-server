@@ -62,6 +62,9 @@ static const struct rate_ctr_desc pcap_client_ctr_desc[] = {
 	[CLIENT_CTR_QERR]		= { "client.queue_err",		"Can not queue data    " },
 	[CLIENT_CTR_PERR]		= { "client.pcap_err",		"libpcap error         " },
 	[CLIENT_CTR_WERR]		= { "client.write_err",		"Write error           " },
+	[CLIENT_CTR_P_RECV]		= { "pcap.recv",		"PCAP received packets " },
+	[CLIENT_CTR_P_DROP]		= { "pcap.drop",		"PCAP dropped packets  " },
+	[CLIENT_CTR_P_IFDROP]		= { "pcap.ifdrop",		"iface dropped packets " },
 };
 
 static const struct rate_ctr_group_desc pcap_client_ctr_group_desc = {

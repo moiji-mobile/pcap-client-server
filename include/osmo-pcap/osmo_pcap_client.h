@@ -38,12 +38,20 @@ enum {
 	CLIENT_CTR_QERR,
 	CLIENT_CTR_PERR,
 	CLIENT_CTR_WERR,
+	CLIENT_CTR_P_RECV,
+	CLIENT_CTR_P_DROP,
+	CLIENT_CTR_P_IFDROP,
 };
 
 struct osmo_pcap_client {
 	char *device;
 	pcap_t *handle;
 	char errbuf[PCAP_ERRBUF_SIZE];
+
+	u_int last_ps_recv;
+	u_int last_ps_drop;
+	u_int last_ps_ifdrop;
+	struct osmo_timer_list pcap_stat_timer;
 
 	struct bpf_program bpf;
 	char   *filter_string;
