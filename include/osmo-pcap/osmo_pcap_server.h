@@ -1,7 +1,7 @@
 /*
  * osmo-pcap-server code
  *
- * (C) 2011 by Holger Hans Peter Freyther <zecke@selfish.org>
+ * (C) 2011-2016 by Holger Hans Peter Freyther <holger@moiji-mobile.com>
  * (C) 2011 by On-Waves
  * All Rights Reserved
  *
@@ -36,6 +36,9 @@
 
 #include <time.h>
 
+struct rate_ctr_group;
+struct rate_ctr_group_desc;
+
 struct osmo_pcap_server;
 
 
@@ -43,6 +46,21 @@ struct osmo_pcap_server;
 #define STATE_DATA	1
 
 #define SERVER_MAX_DATA_SIZE 10000
+
+enum {
+	PEER_CTR_CONNECT,
+	PEER_CTR_BYTES,
+	PEER_CTR_PKTS,
+	PEER_CTR_PROTATE,
+};
+
+enum {
+	SERVER_CTR_CONNECT,
+	SERVER_CTR_BYTES,
+	SERVER_CTR_PKTS,
+	SERVER_CTR_PROTATE,
+	SERVER_CTR_NOCLIENT,
+};
 
 struct osmo_pcap_conn {
 	/* list of connections */
@@ -72,6 +90,9 @@ struct osmo_pcap_conn {
 	int reopen;
 	char buf[SERVER_MAX_DATA_SIZE + sizeof(struct osmo_pcap_data)];
 	struct osmo_pcap_data *data;
+
+	/* statistics */
+	struct rate_ctr_group *ctrg;
 };
 
 struct osmo_pcap_server {
@@ -89,9 +110,13 @@ struct osmo_pcap_server {
 
 	char *base_path;
 	off_t max_size;
+
+	/* statistics */
+	struct rate_ctr_group *ctrg;
 };
 
 extern struct osmo_pcap_server *pcap_server;
+extern const struct rate_ctr_group_desc pcap_peer_group_desc;
 
 void osmo_pcap_server_reopen(struct osmo_pcap_server *server);
 int osmo_pcap_server_listen(struct osmo_pcap_server *server);

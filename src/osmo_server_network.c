@@ -1,7 +1,7 @@
 /*
  * osmo-pcap-server code
  *
- * (C) 2011 by Holger Hans Peter Freyther <zecke@selfish.org>
+ * (C) 2011-2017 by Holger Hans Peter Freyther <holger@moiji-mobile.com>
  * (C) 2011 by On-Waves
  * All Rights Reserved
  *
@@ -26,6 +26,7 @@
 
 #include <osmocom/core/socket.h>
 #include <osmocom/core/talloc.h>
+#include <osmocom/core/rate_ctr.h>
 
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -119,6 +120,8 @@ void osmo_pcap_server_close_trace(struct osmo_pcap_conn *conn)
 
 	if (conn->curr_filename) {
 		client_event(conn, "closingtracefile", conn->curr_filename);
+		rate_ctr_inc(&conn->ctrg->ctr[PEER_CTR_PROTATE]);
+		rate_ctr_inc(&conn->server->ctrg->ctr[SERVER_CTR_PROTATE]);
 		talloc_free(conn->curr_filename);
 		conn->curr_filename = NULL;
 	}
@@ -251,7 +254,9 @@ void osmo_pcap_server_delete(struct osmo_pcap_conn *conn)
 struct osmo_pcap_conn *osmo_pcap_server_find(struct osmo_pcap_server *server,
 					     const char *name)
 {
+	struct rate_ctr_group_desc *desc;
 	struct osmo_pcap_conn *conn;
+
 	llist_for_each_entry(conn, &server->conn, entry) {
 		if (strcmp(conn->name, name) == 0)
 			return conn;
@@ -260,9 +265,42 @@ struct osmo_pcap_conn *osmo_pcap_server_find(struct osmo_pcap_server *server,
 	conn = talloc_zero(server, struct osmo_pcap_conn);
 	if (!conn) {
 		LOGP(DSERVER, LOGL_ERROR,
-		     "Failed to find the connection.\n");
+		     "Failed to allocate the connection peer=%s.\n", name);
 		return NULL;
 	}
+
+	/* a bit nasty. we do not work with ids but names */
+	desc = talloc_zero(conn, struct rate_ctr_group_desc);
+	if (!desc) {
+		LOGP(DSERVER, LOGL_ERROR,
+			"Failed to allocate rate ctr desc peer=%s\n", name);
+		talloc_free(conn);
+		return NULL;
+	}
+	memcpy(desc, &pcap_peer_group_desc, sizeof(pcap_peer_group_desc));
+	desc->group_name_prefix = talloc_asprintf(desc, "pcap.peer.%s", name);
+	if (!desc->group_name_prefix) {
+		LOGP(DSERVER, LOGL_ERROR,
+			"Failed to allocate group name prefix peer=%s\n", name);
+		talloc_free(conn);
+		return NULL;
+	}
+	desc->group_description = talloc_asprintf(desc, "PCAP peer statistics %s", name);
+	if (!desc->group_description) {
+		LOGP(DSERVER, LOGL_ERROR,
+			"Failed to allocate group description peer=%s\n", name);
+		talloc_free(conn);
+		return NULL;
+	}
+
+	conn->ctrg = rate_ctr_group_alloc(desc, desc, 0);
+	if (!conn->ctrg) {
+		LOGP(DSERVER, LOGL_ERROR,
+			"Failed to allocate rate ctr peer=%s\n", name);
+		talloc_free(conn);
+		return NULL;
+	}
+
 
 	conn->name = talloc_strdup(conn, name);
 	conn->rem_fd.fd = -1;
@@ -327,6 +365,15 @@ static int read_cb_data(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
 	} else if (conn->pend == 0) {
 		conn->state = STATE_INITIAL;
 		conn->pend = sizeof(*conn->data);
+
+		/* count the full packet we got */
+		rate_ctr_inc(&conn->ctrg->ctr[PEER_CTR_PKTS]);
+		rate_ctr_inc(&conn->server->ctrg->ctr[SERVER_CTR_PKTS]);
+
+		/* count the bytes of it */
+		rate_ctr_add(&conn->ctrg->ctr[PEER_CTR_BYTES], conn->data->len);
+		rate_ctr_add(&conn->server->ctrg->ctr[SERVER_CTR_BYTES], conn->data->len);
+
 		switch (conn->data->type) {
 		case PKT_LINK_HDR:
 			link_data(conn, conn->data);
@@ -374,6 +421,8 @@ static void new_connection(struct osmo_pcap_server *server,
 		return;
 	}
 
+	rate_ctr_inc(&client->ctrg->ctr[PEER_CTR_CONNECT]);
+
 	client->rem_fd.data = client;
 	client->rem_fd.when = BSC_FD_READ;
 	client->rem_fd.cb = read_cb;
@@ -396,6 +445,10 @@ static int accept_cb(struct osmo_fd *fd, unsigned int when)
 	}
 
 	server = fd->data;
+
+	/* count any accept to see no clients */
+	rate_ctr_inc(&server->ctrg->ctr[SERVER_CTR_CONNECT]);
+
 	llist_for_each_entry(conn, &server->conn, entry) {
 		if (conn->remote_addr.s_addr == addr.sin_addr.s_addr) {
 			LOGP(DSERVER, LOGL_NOTICE,
@@ -406,6 +459,7 @@ static int accept_cb(struct osmo_fd *fd, unsigned int when)
 		}
 	}
 
+	rate_ctr_inc(&server->ctrg->ctr[SERVER_CTR_NOCLIENT]);
 	LOGP(DSERVER, LOGL_ERROR,
 	     "Failed to find client for %s\n", inet_ntoa(addr.sin_addr));
 	close(new_fd);

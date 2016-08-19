@@ -28,6 +28,7 @@
 #include <osmocom/core/select.h>
 #include <osmocom/core/stats.h>
 #include <osmocom/core/talloc.h>
+#include <osmocom/core/utils.h>
 
 #include <osmocom/vty/logging.h>
 #include <osmocom/vty/telnet_interface.h>
@@ -51,6 +52,38 @@ void *tall_bsc_ctx;
 struct osmo_pcap_server *pcap_server;
 extern void *tall_msgb_ctx;
 extern void *tall_ctr_ctx;
+
+
+static const struct rate_ctr_desc pcap_peer_ctr_desc[] = {
+	[PEER_CTR_CONNECT]		= { "peer.connect",	"Connect of a peer   " },
+	[PEER_CTR_BYTES]		= { "peer.bytes",	"Received bytes      " },
+	[PEER_CTR_PKTS]			= { "peer.pkts",	"Received packets    " },
+	[PEER_CTR_PROTATE]		= { "peer.file_rotated","Capture file rotated" },
+};
+
+static const struct rate_ctr_desc pcap_server_ctr_desc[] = {
+	[SERVER_CTR_CONNECT]		= { "server.connect",	"Connect of a peer   " },
+	[SERVER_CTR_BYTES]		= { "server.bytes",	"Received bytes      " },
+	[SERVER_CTR_PKTS]		= { "server.pkts",	"Received packets    " },
+	[SERVER_CTR_PROTATE]		= { "server.file_rotated", "Capture file rotated" },
+	[SERVER_CTR_NOCLIENT]		= { "server.no_client", "Unknown connected   " },
+};
+
+const struct rate_ctr_group_desc pcap_peer_group_desc = {
+	.group_name_prefix		= NULL,	/* will be dynamically patched */
+	.group_description		= "PCAP peer statistics",
+	.num_ctr			= ARRAY_SIZE(pcap_peer_ctr_desc),
+	.ctr_desc			= pcap_peer_ctr_desc,
+	.class_id			= OSMO_STATS_CLASS_PEER,
+};
+
+static const struct rate_ctr_group_desc pcap_server_group_desc = {
+	.group_name_prefix		= "pcap.server",
+	.group_description		= "PCAP Server global statistics",
+	.num_ctr			= ARRAY_SIZE(pcap_server_ctr_desc),
+	.ctr_desc			= pcap_server_ctr_desc,
+	.class_id			= OSMO_STATS_CLASS_GLOBAL,
+};
 
 static struct vty_app_info vty_info = {
 	.name		= "OsmoPCAPServer",
@@ -194,6 +227,12 @@ int main(int argc, char **argv)
 		LOGP(DSERVER, LOGL_ERROR, "Failed to allocate osmo_pcap_server.\n");
 		exit(1);
 	}
+	pcap_server->ctrg = rate_ctr_group_alloc(pcap_server, &pcap_server_group_desc, 0);
+	if (!pcap_server->ctrg) {
+		LOGP(DSERVER, LOGL_ERROR, "Failed to allocate rate counter.\n");
+		exit(1);
+	}
+
 	INIT_LLIST_HEAD(&pcap_server->conn);
 	pcap_server->base_path = talloc_strdup(pcap_server, "./");
 	pcap_server->max_size = 1073741824;
