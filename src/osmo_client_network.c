@@ -92,6 +92,7 @@ static int write_cb(struct osmo_fd *fd, struct msgb *msg)
 	if (rc < 0) {
 		struct osmo_pcap_client *client = fd->data;
 		LOGP(DCLIENT, LOGL_ERROR, "Lost connection on write.\n");
+		rate_ctr_inc(&client->ctrg->ctr[CLIENT_CTR_WERR]);
 		lost_connection(client);
 		return -1;
 	}

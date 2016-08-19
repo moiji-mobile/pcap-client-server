@@ -1,7 +1,7 @@
 /*
  * osmo-pcap-client code
  *
- * (C) 2011 by Holger Hans Peter Freyther <zecke@selfish.org>
+ * (C) 2011-2016 by Holger Hans Peter Freyther <holger@moiji-mobile.com>
  * (C) 2011 by On-Waves
  * All Rights Reserved
  *
@@ -28,6 +28,7 @@
 #include <osmocom/gprs/protocol/gsm_08_16.h>
 #include <osmocom/gprs/protocol/gsm_08_18.h>
 
+#include <osmocom/core/rate_ctr.h>
 #include <osmocom/core/talloc.h>
 
 #include <netinet/in.h>
@@ -158,8 +159,10 @@ static int pcap_read_cb(struct osmo_fd *fd, unsigned int what)
 	const u_char *data;
 
 	data = pcap_next(client->handle, &hdr);
-	if (!data)
+	if (!data) {
+		rate_ctr_inc(&client->ctrg->ctr[CLIENT_CTR_PERR]);
 		return -1;
+	}
 
 	if (!forward_packet(client, &hdr, data))
 		return 0;

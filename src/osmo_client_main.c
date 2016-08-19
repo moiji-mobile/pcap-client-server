@@ -60,6 +60,8 @@ static const struct rate_ctr_desc pcap_client_ctr_desc[] = {
 	[CLIENT_CTR_2BIG]		= { "bpf.too_big",		"Captured data too big " },
 	[CLIENT_CTR_NOMEM]		= { "client.no_mem",		"No memory available   " },
 	[CLIENT_CTR_QERR]		= { "client.queue_err",		"Can not queue data    " },
+	[CLIENT_CTR_PERR]		= { "client.pcap_err",		"libpcap error         " },
+	[CLIENT_CTR_WERR]		= { "client.write_err",		"Write error           " },
 };
 
 static const struct rate_ctr_group_desc pcap_client_ctr_group_desc = {

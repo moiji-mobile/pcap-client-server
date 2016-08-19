@@ -36,6 +36,8 @@ enum {
 	CLIENT_CTR_2BIG,
 	CLIENT_CTR_NOMEM,
 	CLIENT_CTR_QERR,
+	CLIENT_CTR_PERR,
+	CLIENT_CTR_WERR,
 };
 
 struct osmo_pcap_client {
