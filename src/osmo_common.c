@@ -49,6 +49,12 @@ static const struct log_info_cat default_categories[] = {
 		.color = "\033[1;34m",
 		.enabled = 1, .loglevel = LOGL_NOTICE,
 	},
+	[DTLS] = {
+		.name = "DTLS",
+		.description = "TLS code",
+		.color = "\033[1;34m",
+		.enabled = 1, .loglevel = LOGL_NOTICE,
+	},
 };
 
 const struct log_info log_info = {
