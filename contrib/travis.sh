@@ -19,6 +19,15 @@ git clone git://git.osmocom.org/python/osmo-python-tests
 cd osmo-python-tests
 sudo ./setup.py install
 
+#cd ../
+#git clone https://gitlab.com/gnutls/gnutls.git
+#cd gnutls
+#git checkout -b debian gnutls_3_2_1
+#touch ChangeLog
+#autoreconf --install --force
+#./configure --prefix=$PWD/../install
+#make -j 4 install
+
 cd ../../
 autoreconf --install --force
 PCAP_LIBS="-lpcap" PCAP_CFLAGS="" PKG_CONFIG_PATH=$PWD/deps/install/lib/pkgconfig ./configure --with-pcap-config=/bin/true --enable-external-tests

@@ -34,6 +34,7 @@ enum {
 	DCLIENT,
 	DSERVER,
 	DVTY,
+	DTLS,
 	Debug_LastEntry,
 };
 

@@ -20,6 +20,8 @@
  *
  */
 
+#include "osmo_tls.h"
+
 #include <inttypes.h>
 #include <pcap.h>
 
@@ -63,6 +65,20 @@ struct osmo_pcap_client {
 	int srv_port;
 	struct osmo_wqueue wqueue;
 	struct osmo_timer_list timer;
+
+	/* TLS handling */
+	bool tls_on;
+	bool tls_verify;
+	char *tls_hostname;
+	char *tls_capath;
+	char *tls_priority;
+
+	char *tls_client_cert;
+	char *tls_client_key;
+
+	unsigned tls_log_level;
+
+	struct osmo_tls_session tls_session;
 
 	/* statistics */
 	struct rate_ctr_group *ctrg;
