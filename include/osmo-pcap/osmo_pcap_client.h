@@ -79,3 +79,5 @@ void osmo_client_send_data(struct osmo_pcap_client *client,
 			   struct pcap_pkthdr *hdr, const uint8_t *data);
 void osmo_client_send_link(struct osmo_pcap_client *client);
 void osmo_client_connect(struct osmo_pcap_client *);
+
+void osmo_client_reconnect(struct osmo_pcap_client *);

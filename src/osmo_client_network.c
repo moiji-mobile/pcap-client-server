@@ -201,3 +201,8 @@ void osmo_client_connect(struct osmo_pcap_client *client)
 	rate_ctr_inc(&client->ctrg->ctr[CLIENT_CTR_CONNECT]);
 	osmo_client_send_link(client);
 }
+
+void osmo_client_reconnect(struct osmo_pcap_client *client)
+{
+	lost_connection(client);
+}
