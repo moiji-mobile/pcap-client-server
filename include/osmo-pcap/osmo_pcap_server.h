@@ -27,6 +27,7 @@
 
 #include <osmocom/core/select.h>
 #include <osmocom/core/linuxlist.h>
+#include <osmocom/core/write_queue.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -74,7 +75,7 @@ struct osmo_pcap_conn {
 	struct in_addr remote_addr;
 
 	/* Remote connection */
-	struct osmo_fd rem_fd;
+	struct osmo_wqueue rem_wq;
 	int local_fd;
 	char *curr_filename;
 
