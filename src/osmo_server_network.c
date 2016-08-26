@@ -1,7 +1,7 @@
 /*
  * osmo-pcap-server code
  *
- * (C) 2011-2017 by Holger Hans Peter Freyther <holger@moiji-mobile.com>
+ * (C) 2011-2016 by Holger Hans Peter Freyther <holger@moiji-mobile.com>
  * (C) 2011 by On-Waves
  * All Rights Reserved
  *
