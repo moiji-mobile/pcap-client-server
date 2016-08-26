@@ -129,10 +129,10 @@ void osmo_pcap_server_close_trace(struct osmo_pcap_conn *conn)
 
 static void close_connection(struct osmo_pcap_conn *conn)
 {
-	if (conn->rem_fd.fd >= 0) {
-		close(conn->rem_fd.fd);
-		conn->rem_fd.fd = -1;
-		osmo_fd_unregister(&conn->rem_fd);
+	if (conn->rem_wq.bfd.fd >= 0) {
+		close(conn->rem_wq.bfd.fd);
+		conn->rem_wq.bfd.fd = -1;
+		osmo_fd_unregister(&conn->rem_wq.bfd);
 	}
 
 	osmo_pcap_server_close_trace(conn);
@@ -303,7 +303,9 @@ struct osmo_pcap_conn *osmo_pcap_server_find(struct osmo_pcap_server *server,
 
 
 	conn->name = talloc_strdup(conn, name);
-	conn->rem_fd.fd = -1;
+	/* we never write */
+	osmo_wqueue_init(&conn->rem_wq, 0);
+	conn->rem_wq.bfd.fd = -1;
 	conn->local_fd = -1;
 	conn->server = server;
 	conn->data = (struct osmo_pcap_data *) &conn->buf[0];
@@ -387,7 +389,7 @@ static int read_cb_data(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
 	return 0;
 }
 
-static int read_cb(struct osmo_fd *fd, unsigned int what)
+static int read_cb(struct osmo_fd *fd)
 {
 	struct osmo_pcap_conn *conn;
 
@@ -413,19 +415,19 @@ static void new_connection(struct osmo_pcap_server *server,
 	close_connection(client);
 
 	memset(&client->file_hdr, 0, sizeof(client->file_hdr));
-	client->rem_fd.fd = new_fd;
-	if (osmo_fd_register(&client->rem_fd) != 0) {
+	client->rem_wq.bfd.fd = new_fd;
+	if (osmo_fd_register(&client->rem_wq.bfd) != 0) {
 		LOGP(DSERVER, LOGL_ERROR, "Failed to register fd.\n");
-		client->rem_fd.fd = -1;
+		client->rem_wq.bfd.fd = -1;
 		close(new_fd);
 		return;
 	}
 
 	rate_ctr_inc(&client->ctrg->ctr[PEER_CTR_CONNECT]);
 
-	client->rem_fd.data = client;
-	client->rem_fd.when = BSC_FD_READ;
-	client->rem_fd.cb = read_cb;
+	client->rem_wq.bfd.data = client;
+	client->rem_wq.bfd.when = BSC_FD_READ;
+	client->rem_wq.read_cb = read_cb;
 	client->state = STATE_INITIAL;
 	client->pend = sizeof(*client->data);
 }
