@@ -67,9 +67,14 @@ void osmo_tls_init(void);
 
 bool osmo_tls_init_client_session(struct osmo_pcap_client *client);
 
+
 bool osmo_tls_init_server_session(struct osmo_pcap_conn *conn, struct osmo_pcap_server *server);
 void osmo_tls_release(struct osmo_tls_session *);
 
 int osmo_tls_client_bfd_cb(struct osmo_fd *fd, unsigned int what);
 
 size_t osmo_tls_pending(struct osmo_tls_session *session);
+void osmo_tls_server_init(struct osmo_pcap_server *server);
+
+void osmo_tls_dh_load(struct osmo_pcap_server *server);
+void osmo_tls_dh_generate(struct osmo_pcap_server *server);

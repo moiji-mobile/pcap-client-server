@@ -118,11 +118,18 @@ struct osmo_pcap_server {
 	void *zmq_publ;
 
 	/* tls base */
+	bool tls_on;
+	bool tls_allow_anon;
+	bool tls_allow_x509;
 	unsigned tls_log_level;
 	char *tls_priority;
 	char *tls_capath;
+	char *tls_crlfile;
 	char *tls_server_cert;
 	char *tls_server_key;
+	char *tls_dh_pkcs3;
+	gnutls_dh_params_t dh_params;
+	bool dh_params_allocated;
 
 	char *base_path;
 	off_t max_size;
