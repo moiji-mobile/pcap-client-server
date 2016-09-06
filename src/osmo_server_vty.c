@@ -60,9 +60,10 @@ static int config_write_server(struct vty *vty)
 			pcap_server->zmq_ip, pcap_server->zmq_port, VTY_NEWLINE);
 
 	llist_for_each_entry(conn, &pcap_server->conn, entry) {
-		vty_out(vty, " client %s %s%s%s",
+		vty_out(vty, " client %s %s%s%s%s",
 			conn->name, conn->remote_host,
-			conn->no_store ? " no-store" : "",
+			conn->no_store ? " no-store" : " store",
+			conn->tls_use ? " tls" : "",
 			VTY_NEWLINE);
 	}
 
@@ -116,30 +117,60 @@ DEFUN(cfg_server_max_size,
 	return CMD_SUCCESS;
 }
 
-DEFUN(cfg_server_client,
-      cfg_server_client_cmd,
-      "client NAME A.B.C.D [no-store]",
-      CLIENT_STR "Remote name used in filenames\n" "IP of the remote\n" "Do not store traffic\n")
+static int manage_client(struct osmo_pcap_server *pcap_server,
+			struct vty *vty,
+			const char *name, const char *remote_host,
+			bool no_store, bool use_tls)
 {
 	struct osmo_pcap_conn *conn;
-	conn = osmo_pcap_server_find(pcap_server, argv[0]);
+	conn = osmo_pcap_server_find(pcap_server, name);
 	if (!conn) {
 		vty_out(vty, "Failed to create a pcap server.\n");
 		return CMD_WARNING;
 	}
 
 	talloc_free(conn->remote_host);
-	conn->remote_host = talloc_strdup(pcap_server, argv[1]);
-	inet_aton(argv[1], &conn->remote_addr);
+	conn->remote_host = talloc_strdup(pcap_server, remote_host);
+	inet_aton(remote_host, &conn->remote_addr);
 
 	/* Checking no-store and maybe closing a pcap file */
-	if (argc >= 3) {
+	if (no_store) {
 		osmo_pcap_server_close_trace(conn);
 		conn->no_store = 1;
 	} else
 		conn->no_store = 0;
 
+	if (use_tls) {
+		/* force moving to TLS */
+		if (!conn->tls_use)
+			osmo_pcap_server_close_conn(conn);
+		conn->tls_use = true;
+	} else {
+		conn->tls_use = false;
+	}
+
 	return CMD_SUCCESS;
+}
+
+
+DEFUN(cfg_server_client,
+      cfg_server_client_cmd,
+      "client NAME A.B.C.D [no-store] [tls]",
+      CLIENT_STR "Remote name used in filenames\n"
+      "IP of the remote\n" "Do not store traffic\n"
+      "Use Transport Level Security\n")
+{
+	return manage_client(pcap_server, vty, argv[0], argv[1], argc >= 3, argc >= 4);
+}
+
+DEFUN(cfg_server_client_store_tls,
+      cfg_server_client_store_tls_cmd,
+      "client NAME A.B.C.D store [tls]",
+      CLIENT_STR "Remote name used in filenames\n"
+      "IP of the remote\n" "Do not store traffic\n"
+      "Use Transport Level Security\n")
+{
+	return manage_client(pcap_server, vty, argv[0], argv[1], false, argc >= 3);
 }
 
 DEFUN(cfg_server_no_client,
@@ -255,5 +286,6 @@ void vty_server_init(struct osmo_pcap_server *server)
 	install_element(SERVER_NODE, &cfg_no_server_zmq_ip_port_cmd);
 
 	install_element(SERVER_NODE, &cfg_server_client_cmd);
+	install_element(SERVER_NODE, &cfg_server_client_store_tls_cmd);
 	install_element(SERVER_NODE, &cfg_server_no_client_cmd);
 }
