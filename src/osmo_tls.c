@@ -35,15 +35,81 @@
 			exit(1); \
 		}
 
-static gnutls_dh_params_t dh_params;
-static int generate_dh_params (void)
+static int generate_dh_params(struct osmo_pcap_server *server)
 {
+	int rc;
 	unsigned int bits =  gnutls_sec_param_to_pk_bits(GNUTLS_PK_DH,
 							GNUTLS_SEC_PARAM_HIGH);
 
 	LOGP(DTLS, LOGL_NOTICE, "Going to create DH params for %d bits\n", bits);
-	gnutls_dh_params_init (&dh_params);
-	return gnutls_dh_params_generate2 (dh_params, bits);
+
+	/* allocate it */
+	rc = gnutls_dh_params_init (&server->dh_params);
+	if (rc != GNUTLS_E_SUCCESS) {
+		LOGP(DTLS, LOGL_ERROR, "Failed to allocate DH params rc=%d\n", rc);
+		server->dh_params_allocated = false;
+		return rc;
+	}
+
+	/* generate and check */
+	rc = gnutls_dh_params_generate2 (server->dh_params, bits);
+	if (rc == GNUTLS_E_SUCCESS)
+		server->dh_params_allocated = true;
+	else {
+		LOGP(DTLS, LOGL_ERROR, "Failed to generate DH params rc=%d\n", rc);
+		server->dh_params_allocated = false;
+		gnutls_dh_params_deinit(server->dh_params);
+	}
+	return rc;
+}
+
+void osmo_tls_dh_load(struct osmo_pcap_server *server)
+{
+	gnutls_datum_t data;
+	int rc;
+
+	/* free it before we start */
+	if (server->dh_params_allocated) {
+		gnutls_dh_params_deinit(server->dh_params);
+		server->dh_params_allocated = false;
+	}
+	/* check if we have all data */
+	if (!server->tls_dh_pkcs3) {
+		LOGP(DTLS, LOGL_ERROR, "Can not generate missing pkcs3=%p\n",
+			server->tls_dh_pkcs3);
+		return;
+	}
+	/* initialize it again */
+	rc = gnutls_dh_params_init (&server->dh_params);
+	if (rc != GNUTLS_E_SUCCESS) {
+		LOGP(DTLS, LOGL_ERROR, "Failed to allocate DH params rc=%d\n", rc);
+		server->dh_params_allocated = false;
+		return;
+	}
+	/* load prime and generator */
+	rc = gnutls_load_file(server->tls_dh_pkcs3, &data);
+	if (rc != GNUTLS_E_SUCCESS) {
+		LOGP(DTLS, LOGL_ERROR, "Failed to load DH params from=%s rc=%d\n",
+			server->tls_dh_pkcs3, rc);
+		gnutls_dh_params_deinit(server->dh_params);
+		return;
+	}
+	rc = gnutls_dh_params_import_pkcs3(server->dh_params, &data, GNUTLS_X509_FMT_PEM);
+	gnutls_free(data.data);
+	if (rc != GNUTLS_E_SUCCESS) {
+		LOGP(DTLS, LOGL_ERROR, "Failed to import DH params rc=%d\n", rc);
+		gnutls_dh_params_deinit(server->dh_params);
+		return;
+	}
+	/* done */
+	server->dh_params_allocated = true;
+}
+
+void osmo_tls_dh_generate(struct osmo_pcap_server *server)
+{
+	if (server->dh_params_allocated)
+		gnutls_dh_params_deinit(server->dh_params);
+	generate_dh_params(server);
 }
 
 static int cert_callback(gnutls_session_t tls_session,
@@ -105,7 +171,15 @@ void osmo_tls_init(void)
 	rc = gnutls_global_init();
 	CHECK_RC(rc, "init failed");
         gnutls_global_set_log_function(tls_log_func);
-	rc = generate_dh_params();
+}
+
+void osmo_tls_server_init(struct osmo_pcap_server *server)
+{
+	int rc;
+
+	if (server->dh_params_allocated)
+		return;
+	rc = generate_dh_params(server);
 	CHECK_RC(rc, "dh params failed");
 }
 
@@ -312,10 +386,15 @@ bool osmo_tls_init_server_session(struct osmo_pcap_conn *conn,
 	sess->cert_alloc = true;
 
 	/* set the credentials now */
-#warning "Anon?"
-  	gnutls_anon_set_server_dh_params (sess->anon_serv_cred, dh_params);
-	gnutls_credentials_set(sess->session, GNUTLS_CRD_ANON, sess->anon_serv_cred);
-	gnutls_credentials_set(sess->session, GNUTLS_CRD_CERTIFICATE, sess->cert_cred);
+	if (server->dh_params_allocated) {
+		gnutls_anon_set_server_dh_params(sess->anon_serv_cred, server->dh_params);
+		gnutls_certificate_set_dh_params(sess->cert_cred, server->dh_params);
+	}
+
+	if (server->tls_allow_anon)
+		gnutls_credentials_set(sess->session, GNUTLS_CRD_ANON, sess->anon_serv_cred);
+	if (server->tls_allow_x509)
+		gnutls_credentials_set(sess->session, GNUTLS_CRD_CERTIFICATE, sess->cert_cred);
 
 	if (server->tls_capath) {
 		rc = gnutls_certificate_set_x509_trust_file(
@@ -328,12 +407,28 @@ bool osmo_tls_init_server_session(struct osmo_pcap_conn *conn,
 		}
 	}
 
-#if 0
-	if (load_keys(client) != 0) {
-		osmo_tls_release(sess);
-		return false;
+	if (server->tls_crlfile) {
+		rc = gnutls_certificate_set_x509_crl_file(
+				sess->cert_cred, server->tls_crlfile, GNUTLS_X509_FMT_PEM);
+		if (rc != GNUTLS_E_SUCCESS) {
+			LOGP(DTLS, LOGL_ERROR, "Failed to load crlfile from path=%s rc=%d\n",
+				server->tls_crlfile, rc);
+			osmo_tls_release(sess);
+			return false;
+		}
 	}
-#endif
+
+	if (server->tls_server_cert && server->tls_server_key) {
+		rc = gnutls_certificate_set_x509_key_file(
+				sess->cert_cred, server->tls_server_cert, server->tls_server_key,
+				GNUTLS_X509_FMT_PEM);
+		if (rc != GNUTLS_E_SUCCESS) {
+			LOGP(DTLS, LOGL_ERROR, "Failed to load crt/key from path=%s/%s rc=%d\n",
+				server->tls_server_cert, server->tls_server_key, rc);
+			osmo_tls_release(sess);
+			return false;
+		}
+	}
 
 	#warning "TODO client certificates"
 

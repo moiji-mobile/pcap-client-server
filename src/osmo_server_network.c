@@ -491,7 +491,13 @@ static void new_connection(struct osmo_pcap_server *server,
 	client->state = STATE_INITIAL;
 	client->pend = sizeof(*client->data);
 
-	if (client->tls_use) {
+	if (client->tls_use && !server->tls_on) {
+		LOGP(DSERVER, LOGL_NOTICE,
+			"Require TLS but not enabled on conn=%s\n",
+			client->name);
+		close_connection(client);
+		return;
+	} else if (client->tls_use) {
 		if (!osmo_tls_init_server_session(client, server)) {
 			close_connection(client);
 			return;

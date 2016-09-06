@@ -247,6 +247,8 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
+	osmo_tls_server_init(pcap_server);
+
 	/* attempt to connect to the remote */
 	if (osmo_pcap_server_listen(pcap_server) != 0) {
 		LOGP(DSERVER, LOGL_ERROR,
