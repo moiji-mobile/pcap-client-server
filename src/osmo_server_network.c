@@ -132,6 +132,7 @@ static void close_connection(struct osmo_pcap_conn *conn)
 	if (conn->rem_wq.bfd.fd >= 0) {
 		close(conn->rem_wq.bfd.fd);
 		conn->rem_wq.bfd.fd = -1;
+		osmo_tls_release(&conn->tls_session);
 		osmo_fd_unregister(&conn->rem_wq.bfd);
 	}
 
@@ -319,9 +320,19 @@ struct osmo_pcap_conn *osmo_pcap_server_find(struct osmo_pcap_server *server,
 	return conn;
 }
 
+static int do_read_tls(struct osmo_pcap_conn *conn, void *buf, size_t want_size)
+{
+	size_t size = want_size;
+	if (conn->tls_limit_read && size > conn->tls_limit_read)
+		size = conn->tls_limit_read;
+	return gnutls_record_recv(conn->tls_session.session, buf, size);
+}
+
 static int do_read(struct osmo_pcap_conn *conn, void *buf, size_t size)
 {
-	return read(conn->rem_wq.bfd.fd, buf, size);
+	if (conn->direct_read)
+		return read(conn->rem_wq.bfd.fd, buf, size);
+	return do_read_tls(conn, buf, size);
 }
 
 static int read_cb_initial(struct osmo_pcap_conn *conn)
@@ -425,6 +436,42 @@ static int read_cb(struct osmo_fd *fd)
 	return 0;
 }
 
+static void tls_error_cb(struct osmo_tls_session *session)
+{
+	struct osmo_pcap_conn *conn;
+	conn = container_of(session, struct osmo_pcap_conn, tls_session);
+	close_connection(conn);
+}
+
+static int tls_read_cb(struct osmo_tls_session *session)
+{
+	struct osmo_pcap_conn *conn;
+	size_t pend;
+	int rc;
+
+	conn = container_of(session, struct osmo_pcap_conn, tls_session);
+	conn->tls_limit_read = 0;
+	rc = dispatch_read(conn);
+	if (rc <= 0)
+		return rc;
+
+	/**
+	 * This is a weakness of a single select approach and the
+	 * buffered reading here. We need to read everything as
+	 * otherwise we do not receive a ready-read. But at the
+	 * same time don't read more than is buffered! So cap what
+	 * can be read right now.
+	 */
+	while ((pend = osmo_tls_pending(session)) > 0) {
+		conn->tls_limit_read = pend;
+		rc = dispatch_read(conn);
+		if (rc <= 0)
+			return rc;
+	}
+
+	return 1;
+}
+
 static void new_connection(struct osmo_pcap_server *server,
 			   struct osmo_pcap_conn *client, int new_fd)
 {
@@ -441,11 +488,24 @@ static void new_connection(struct osmo_pcap_server *server,
 
 	rate_ctr_inc(&client->ctrg->ctr[PEER_CTR_CONNECT]);
 
-	client->rem_wq.bfd.data = client;
-	client->rem_wq.bfd.when = BSC_FD_READ;
-	client->rem_wq.read_cb = read_cb;
 	client->state = STATE_INITIAL;
 	client->pend = sizeof(*client->data);
+
+	if (client->tls_use) {
+		if (!osmo_tls_init_server_session(client, server)) {
+			close_connection(client);
+			return;
+		}
+		client->tls_session.error = tls_error_cb;
+		client->tls_session.read = tls_read_cb;
+		client->direct_read = false;
+	} else {
+		client->rem_wq.bfd.cb = osmo_wqueue_bfd_cb;
+		client->rem_wq.bfd.data = client;
+		client->rem_wq.bfd.when = BSC_FD_READ;
+		client->rem_wq.read_cb = read_cb;
+		client->direct_read = true;
+	}
 }
 
 static int accept_cb(struct osmo_fd *fd, unsigned int when)
@@ -478,6 +538,12 @@ static int accept_cb(struct osmo_fd *fd, unsigned int when)
 	}
 
 	rate_ctr_inc(&server->ctrg->ctr[SERVER_CTR_NOCLIENT]);
+
+	/*
+	 * TODO: In the future start with a tls handshake and see if we know
+	 * this client.
+	 */
+
 	LOGP(DSERVER, LOGL_ERROR,
 	     "Failed to find client for %s\n", inet_ntoa(addr.sin_addr));
 	close(new_fd);

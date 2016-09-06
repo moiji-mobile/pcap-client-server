@@ -24,6 +24,7 @@
 #define OSMO_PCAP_SERVER_H
 
 #include "wireformat.h"
+#include "osmo_tls.h"
 
 #include <osmocom/core/select.h>
 #include <osmocom/core/linuxlist.h>
@@ -35,6 +36,7 @@
 
 #include <pcap.h>
 
+#include <stdbool.h>
 #include <time.h>
 
 struct rate_ctr_group;
@@ -94,6 +96,12 @@ struct osmo_pcap_conn {
 
 	/* statistics */
 	struct rate_ctr_group *ctrg;
+
+	/* tls */
+	bool tls_use;
+	bool direct_read;
+	size_t tls_limit_read;
+	struct osmo_tls_session tls_session;
 };
 
 struct osmo_pcap_server {
@@ -108,6 +116,13 @@ struct osmo_pcap_server {
 	char *zmq_ip;
 	void *zmq_ctx;
 	void *zmq_publ;
+
+	/* tls base */
+	unsigned tls_log_level;
+	char *tls_priority;
+	char *tls_capath;
+	char *tls_server_cert;
+	char *tls_server_key;
 
 	char *base_path;
 	off_t max_size;

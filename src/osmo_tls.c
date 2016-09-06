@@ -21,6 +21,7 @@
 
 #include <osmo-pcap/osmo_tls.h>
 #include <osmo-pcap/osmo_pcap_client.h>
+#include <osmo-pcap/osmo_pcap_server.h>
 #include <osmo-pcap/common.h>
 
 #include <osmocom/core/write_queue.h>
@@ -34,6 +35,16 @@
 			exit(1); \
 		}
 
+static gnutls_dh_params_t dh_params;
+static int generate_dh_params (void)
+{
+	unsigned int bits =  gnutls_sec_param_to_pk_bits(GNUTLS_PK_DH,
+							GNUTLS_SEC_PARAM_HIGH);
+
+	LOGP(DTLS, LOGL_NOTICE, "Going to create DH params for %d bits\n", bits);
+	gnutls_dh_params_init (&dh_params);
+	return gnutls_dh_params_generate2 (dh_params, bits);
+}
 
 static int cert_callback(gnutls_session_t tls_session,
 				const gnutls_datum_t * req_ca_rdn, int nreqs,
@@ -94,6 +105,8 @@ void osmo_tls_init(void)
 	rc = gnutls_global_init();
 	CHECK_RC(rc, "init failed");
         gnutls_global_set_log_function(tls_log_func);
+	rc = generate_dh_params();
+	CHECK_RC(rc, "dh params failed");
 }
 
 static int need_handshake(struct osmo_tls_session *tls_session)
@@ -110,7 +123,8 @@ static int need_handshake(struct osmo_tls_session *tls_session)
 			tls_session->wqueue->bfd.when = BSC_FD_READ;
 		tls_session->need_handshake = false;
 		release_keys(tls_session);
-		tls_session->handshake_done(tls_session);
+		if (tls_session->handshake_done)
+			tls_session->handshake_done(tls_session);
 	} else if (rc == GNUTLS_E_AGAIN || rc == GNUTLS_E_INTERRUPTED) {
 		LOGP(DTLS, LOGL_DEBUG, "rc=%d will wait for writable again.\n", rc);
 	} else if (gnutls_error_is_fatal(rc)) {
@@ -127,6 +141,9 @@ static int tls_read(struct osmo_tls_session *sess)
 {
 	char buf[1024];
 	int rc;
+
+	if (sess->read)
+		return sess->read(sess);
 
 	memset(buf, 0, sizeof(buf));
 	rc = gnutls_record_recv(sess->session, buf, sizeof(buf) - 1);
@@ -238,6 +255,99 @@ static int load_keys(struct osmo_pcap_client *client)
 	return 0;
 }
 
+size_t osmo_tls_pending(struct osmo_tls_session *sess)
+{
+	return gnutls_record_check_pending(sess->session);
+}
+
+bool osmo_tls_init_server_session(struct osmo_pcap_conn *conn,
+					struct osmo_pcap_server *server)
+{
+	struct osmo_tls_session *sess = &conn->tls_session;
+	struct osmo_wqueue *wq = &conn->rem_wq;
+	int rc;
+
+	gnutls_global_set_log_level(server->tls_log_level);
+
+	memset(sess, 0, sizeof(*sess));
+	sess->in_use = sess->anon_alloc = sess->cert_alloc = false;
+	rc = gnutls_init(&sess->session, GNUTLS_SERVER | GNUTLS_NONBLOCK);
+	if (rc != GNUTLS_E_SUCCESS) {
+		LOGP(DTLS, LOGL_ERROR, "gnutls_init failed with rc=%d\n", rc);
+		return false;
+	}
+	gnutls_session_set_ptr(sess->session, sess);
+	sess->in_use = true;
+
+	/* use default or string */
+	if (server->tls_priority) {
+		const char *err;
+		rc = gnutls_priority_set_direct(sess->session, server->tls_priority, &err);
+	} else {
+		rc = gnutls_set_default_priority(sess->session);
+	}
+
+	if (rc != GNUTLS_E_SUCCESS) {
+		LOGP(DTLS, LOGL_ERROR, "def prio failed with rc=%d\n", rc);
+		osmo_tls_release(sess);
+		return false;
+	}
+
+	/* allow username/password operation */
+	rc = gnutls_anon_allocate_server_credentials(&sess->anon_serv_cred);
+	if (rc != GNUTLS_E_SUCCESS) {
+		LOGP(DTLS, LOGL_ERROR, "Failed to allocate anon cred rc=%d\n", rc);
+		osmo_tls_release(sess);
+		return false;
+	}
+	sess->anon_serv_alloc = true;
+
+	/* x509 certificate handling */
+	rc = gnutls_certificate_allocate_credentials(&sess->cert_cred);
+	if (rc != GNUTLS_E_SUCCESS) {
+		LOGP(DTLS, LOGL_ERROR, "Failed to allocate x509 cred rc=%d\n", rc);
+		osmo_tls_release(sess);
+		return false;
+	}
+	sess->cert_alloc = true;
+
+	/* set the credentials now */
+#warning "Anon?"
+  	gnutls_anon_set_server_dh_params (sess->anon_serv_cred, dh_params);
+	gnutls_credentials_set(sess->session, GNUTLS_CRD_ANON, sess->anon_serv_cred);
+	gnutls_credentials_set(sess->session, GNUTLS_CRD_CERTIFICATE, sess->cert_cred);
+
+	if (server->tls_capath) {
+		rc = gnutls_certificate_set_x509_trust_file(
+				sess->cert_cred, server->tls_capath, GNUTLS_X509_FMT_PEM);
+		if (rc != GNUTLS_E_SUCCESS) {
+			LOGP(DTLS, LOGL_ERROR, "Failed to load capath from path=%s rc=%d\n",
+				server->tls_capath, rc);
+			osmo_tls_release(sess);
+			return false;
+		}
+	}
+
+#if 0
+	if (load_keys(client) != 0) {
+		osmo_tls_release(sess);
+		return false;
+	}
+#endif
+
+	#warning "TODO client certificates"
+
+	gnutls_transport_set_int(sess->session, wq->bfd.fd);
+	gnutls_handshake_set_timeout(sess->session,
+					GNUTLS_DEFAULT_HANDSHAKE_TIMEOUT);
+	wq->bfd.cb = osmo_tls_client_bfd_cb;
+	wq->bfd.data = sess;
+	wq->bfd.when = BSC_FD_READ | BSC_FD_WRITE;
+	sess->need_handshake = true;
+	sess->wqueue = wq;
+	return true;
+}
+
 bool osmo_tls_init_client_session(struct osmo_pcap_client *client)
 {
 	struct osmo_tls_session *sess = &client->tls_session;
@@ -345,6 +455,8 @@ void osmo_tls_release(struct osmo_tls_session *session)
 
 	if (session->anon_alloc)
 		gnutls_anon_free_client_credentials(session->anon_cred);
+	if (session->anon_serv_alloc)
+		gnutls_anon_free_server_credentials(session->anon_serv_cred);
 	if (session->cert_alloc)
 		gnutls_certificate_free_credentials(session->cert_cred);
 	session->in_use = false;

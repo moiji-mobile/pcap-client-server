@@ -24,10 +24,13 @@
 #include <gnutls/abstract.h>
 
 #include <stdbool.h>
+#include <stdint.h>
 
 struct osmo_fd;
 struct osmo_wqueue;
 struct osmo_pcap_client;
+struct osmo_pcap_conn;
+struct osmo_pcap_server;
 
 struct osmo_tls_session {
 	bool in_use;
@@ -38,6 +41,8 @@ struct osmo_tls_session {
 	/* any credentials */
 	bool anon_alloc;
 	gnutls_anon_client_credentials_t anon_cred;
+	bool anon_serv_alloc;
+	gnutls_anon_server_credentials_t anon_serv_cred;
 
 	/* a x509 cert credential */
 	bool cert_alloc;
@@ -53,6 +58,7 @@ struct osmo_tls_session {
 
 	struct osmo_wqueue *wqueue;
 
+	int (*read)(struct osmo_tls_session *session);
 	void (*error)(struct osmo_tls_session *session);
 	void (*handshake_done)(struct osmo_tls_session *session);
 };
@@ -60,6 +66,10 @@ struct osmo_tls_session {
 void osmo_tls_init(void);
 
 bool osmo_tls_init_client_session(struct osmo_pcap_client *client);
+
+bool osmo_tls_init_server_session(struct osmo_pcap_conn *conn, struct osmo_pcap_server *server);
 void osmo_tls_release(struct osmo_tls_session *);
 
 int osmo_tls_client_bfd_cb(struct osmo_fd *fd, unsigned int what);
+
+size_t osmo_tls_pending(struct osmo_tls_session *session);

@@ -10,5 +10,7 @@ osmo_pcap_client_LDADD = $(PCAP_LIBS) $(LIBOSMOCORE_LIBS) $(LIBOSMOVTY_LIBS) \
 	$(LIBOSMOGSM_LIBS) $(LIBGNUTLS_LIBS)
 
 osmo_pcap_server_SOURCES = osmo_server_main.c osmo_common.c \
-			   osmo_server_vty.c osmo_server_network.c
-osmo_pcap_server_LDADD = $(LIBOSMOCORE_LIBS) $(LIBOSMOVTY_LIBS) $(LIBZMQ_LIBS)
+			   osmo_server_vty.c osmo_server_network.c \
+			   osmo_tls.c
+osmo_pcap_server_LDADD = $(LIBOSMOCORE_LIBS) $(LIBOSMOVTY_LIBS) $(LIBZMQ_LIBS) \
+	$(LIBGNUTLS_LIBS)
