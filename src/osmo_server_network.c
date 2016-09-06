@@ -139,6 +139,11 @@ static void close_connection(struct osmo_pcap_conn *conn)
 	client_event(conn, "disconnect", NULL);
 }
 
+void osmo_pcap_server_close_conn(struct osmo_pcap_conn *conn)
+{
+	return close_connection(conn);
+}
+
 static void restart_pcap(struct osmo_pcap_conn *conn)
 {
 	time_t now = time(NULL);

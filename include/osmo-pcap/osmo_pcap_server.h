@@ -126,5 +126,6 @@ struct osmo_pcap_conn *osmo_pcap_server_find(struct osmo_pcap_server *ser,
 void osmo_pcap_server_delete(struct osmo_pcap_conn *conn);
 void vty_server_init(struct osmo_pcap_server *server);
 void osmo_pcap_server_close_trace(struct osmo_pcap_conn *conn);
+void osmo_pcap_server_close_conn(struct osmo_pcap_conn *conn);
 
 #endif
