@@ -187,14 +187,13 @@ static void restart_pcap(struct osmo_pcap_conn *conn)
 	conn->last_write = *tm;
 }
 
-static void link_data(struct osmo_pcap_conn *conn, struct osmo_pcap_data *data)
+static int link_data(struct osmo_pcap_conn *conn, struct osmo_pcap_data *data)
 {
 	struct pcap_file_header *hdr;
 
 	if (data->len != sizeof(*hdr)) {
 		LOGP(DSERVER, LOGL_ERROR, "The pcap_file_header does not fit.\n");
-		close_connection(conn);
-		return;
+		return -1;
 	}
 
 	hdr = (struct pcap_file_header *) &data->data[0];
@@ -205,12 +204,14 @@ static void link_data(struct osmo_pcap_conn *conn, struct osmo_pcap_data *data)
 		conn->file_hdr = *hdr;
 		restart_pcap(conn);
 	}
+
+	return 1;
 }
 
 /*
  * Check if we are past the limit or on a day change
  */
-static void write_data(struct osmo_pcap_conn *conn, struct osmo_pcap_data *data)
+static int write_data(struct osmo_pcap_conn *conn, struct osmo_pcap_data *data)
 {
 	time_t now = time(NULL);
 	struct tm *tm = localtime(&now);
@@ -220,13 +221,12 @@ static void write_data(struct osmo_pcap_conn *conn, struct osmo_pcap_data *data)
 
 	if (conn->no_store) {
 		conn->last_write = *tm;
-		return;
+		return 1;
 	}
 
 	if (conn->local_fd < -1) {
 		LOGP(DSERVER, LOGL_ERROR, "No file is open. close connection.\n");
-		close_connection(conn);
-		return; 
+		return -1;
 	}
 
 	off_t cur = lseek(conn->local_fd, 0, SEEK_CUR);
@@ -244,8 +244,9 @@ static void write_data(struct osmo_pcap_conn *conn, struct osmo_pcap_data *data)
 	rc = write(conn->local_fd, &data->data[0], data->len);
 	if (rc != data->len) {
 		LOGP(DSERVER, LOGL_ERROR, "Failed to write for %s\n", conn->name);
-		close_connection(conn);
+		return -1;
 	}
+	return 1;
 }
 
 
@@ -318,14 +319,19 @@ struct osmo_pcap_conn *osmo_pcap_server_find(struct osmo_pcap_server *server,
 	return conn;
 }
 
-static int read_cb_initial(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
+static int do_read(struct osmo_pcap_conn *conn, void *buf, size_t size)
+{
+	return read(conn->rem_wq.bfd.fd, buf, size);
+}
+
+static int read_cb_initial(struct osmo_pcap_conn *conn)
 {
 	int rc;
-	rc = read(fd->fd, &conn->buf[sizeof(*conn->data) - conn->pend], conn->pend);
+
+	rc = do_read(conn, &conn->buf[sizeof(*conn->data) - conn->pend], conn->pend);
 	if (rc <= 0) {
 		LOGP(DSERVER, LOGL_ERROR,
 		     "Too short packet. Got %d, wanted %d\n", rc, conn->data->len);
-		close_connection(conn);
 		return -1;
 	}
 
@@ -333,7 +339,6 @@ static int read_cb_initial(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
 	if (conn->pend < 0) {
 		LOGP(DSERVER, LOGL_ERROR,
 		     "Someone got the pending read wrong: %d\n", conn->pend);
-		close_connection(conn);
 		return -1;
 	} else if (conn->pend == 0) {
 		conn->data->len = ntohs(conn->data->len);
@@ -341,7 +346,6 @@ static int read_cb_initial(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
 		if (conn->data->len > SERVER_MAX_DATA_SIZE) {
 			LOGP(DSERVER, LOGL_ERROR,
 			     "Implausible data length: %u\n", conn->data->len);
-			close_connection(conn);
 			return -1;
 		}
 
@@ -349,17 +353,17 @@ static int read_cb_initial(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
 		conn->pend = conn->data->len;
 	}
 
-	return 0;
+	return 1;
 }
 
-static int read_cb_data(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
+static int read_cb_data(struct osmo_pcap_conn *conn)
 {
 	int rc;
-	rc = read(fd->fd, &conn->data->data[conn->data->len - conn->pend], conn->pend);
+
+	rc = do_read(conn, &conn->data->data[conn->data->len - conn->pend], conn->pend);
 	if (rc <= 0) {
 		LOGP(DSERVER, LOGL_ERROR,
 		     "Too short packet. Got %d, wanted %d\n", rc, conn->data->len);
-		close_connection(conn);
 		return -1;
 	}
 
@@ -367,7 +371,6 @@ static int read_cb_data(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
 	if (conn->pend < 0) {
 		LOGP(DSERVER, LOGL_ERROR,
 		     "Someone got the pending read wrong: %d\n", conn->pend);
-		close_connection(conn);
 		return -1;
 	} else if (conn->pend == 0) {
 		conn->state = STATE_INITIAL;
@@ -383,12 +386,28 @@ static int read_cb_data(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
 
 		switch (conn->data->type) {
 		case PKT_LINK_HDR:
-			link_data(conn, conn->data);
+			return link_data(conn, conn->data);
 			break;
 		case PKT_LINK_DATA:
-			write_data(conn, conn->data);
+			return write_data(conn, conn->data);
 			break;
 		}
+	}
+
+	return 1;
+}
+
+static int dispatch_read(struct osmo_pcap_conn *conn)
+{
+	if (conn->state == STATE_INITIAL) {
+		if (conn->reopen) {
+			LOGP(DSERVER, LOGL_INFO, "Reopening log for %s now.\n", conn->name);
+			restart_pcap(conn);
+			conn->reopen = 0;
+		}
+		return read_cb_initial(conn);
+	} else if (conn->state == STATE_DATA) {
+		return read_cb_data(conn);
 	}
 
 	return 0;
@@ -397,20 +416,12 @@ static int read_cb_data(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
 static int read_cb(struct osmo_fd *fd)
 {
 	struct osmo_pcap_conn *conn;
+	int rc;
 
 	conn = fd->data;
-
-	if (conn->state == STATE_INITIAL) {
-		if (conn->reopen) {
-			LOGP(DSERVER, LOGL_INFO, "Reopening log for %s now.\n", conn->name);
-			restart_pcap(conn);
-			conn->reopen = 0;
-		}
-		return read_cb_initial(fd, conn);
-	} else if (conn->state == STATE_DATA) {
-		return read_cb_data(fd, conn);
-	}
-
+	rc = dispatch_read(conn);
+	if (rc <= 0)
+		close_connection(conn);
 	return 0;
 }
 
