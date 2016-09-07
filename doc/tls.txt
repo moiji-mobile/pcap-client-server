@@ -1,0 +1,76 @@
+TLS support
+===========
+
+Protect forwarded PCAP packet against eave-dropping by using
+TLS between client and server.
+
+Anonymous TLS
+^^^^^^^^^^^^^
+
+The minimal configuration will use TLS with perfect forward
+secrecy but not use X509 certificates. This means a client
+will not know if it connects to the intended server but an
+attacker listening will not be able to determine the content
+of the messages.
+
+Client::
+---
+ enable tls
+ tls dh generate
+ tls priority NORMAL:-VERS-SSL3.0:-VERS-TLS1.0:-VERS-TLS1.1:+ANON-ECDH:+ANON-DH
+----
+
+Server::
+----
+  enable tls
+  tls dh generate
+  tls allow-auth anonymous
+----
+  
+
+Authenticate Server
+^^^^^^^^^^^^^^^^^^^
+
+This will use x509 certificates and allows a client to verify
+it connects to a server with the right credentials. This will
+protect messages against eaves-dropping and sending data to the
+wrong system.
+
+
+
+Client::
+
+----
+  enable tls
+  tls verify-cert
+  tls capath /etc/osmocom/ca.pem
+----
+
+Server::
+
+----
+  enable tls
+  tls allow-auth x509
+  tls capath /etc/osmocom/ca.pem
+  tls crlfile /etc/osmocom/server.crl
+  tls server-cert /etc/osmocom/server.crt
+  tls server-key /etc/osmosomc/server.key
+  client NAME IP store tls
+----
+
+Client certificate
+^^^^^^^^^^^^^^^^^^
+
+Currently this is not implemented. In the future a client
+can be authenticated based on the SN/CN of a certificate.
+
+Debugging
+=========
+
+GNUtls debugging can be enabled by setting the TLS debug
+region to debug and then setting the _tls loglevel N_. The
+setting will be applied on the next connection using TLS.
+
+----
+ logging level tls debug
+ tls loglevel 9
