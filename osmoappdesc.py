@@ -15,8 +15,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 app_configs = {
-    "osmo-pcap-client": ["contrib/osmo-pcap-client.cfg"],
-    "osmo-pcap-server": ["contrib/osmo-pcap-server.cfg"]
+    "osmo-pcap-client": ["contrib/osmo-pcap-client.cfg", "contrib/osmo-pcap-client-tls.cfg"],
+    "osmo-pcap-server": ["contrib/osmo-pcap-server.cfg", "contrib/osmo-pcap-server-tls.cfg"]
 }
 
 apps = [
