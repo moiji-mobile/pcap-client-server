@@ -4,6 +4,7 @@ AC_INIT([osmo-pcap],
 	[openbsc-devel@lists.openbsc.org])
 
 AM_INIT_AUTOMAKE([dist-bzip2])
+AC_CONFIG_TESTDIR(tests)
 
 dnl kernel style compile messages
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
@@ -17,6 +18,20 @@ AC_PROG_RANLIB
 dnl checks for header files
 AC_HEADER_STDC
 
+AC_ARG_ENABLE([external_tests],
+		AC_HELP_STRING([--enable-external-tests],
+				[Include the VTY tests in make check [default=no]]),
+		[enable_ext_tests="$enableval"],[enable_ext_tests="no"])
+if test "x$enable_ext_tests" = "xyes" ; then
+	AM_PATH_PYTHON
+	AC_CHECK_PROG(OSMOTESTEXT_CHECK,osmotestvty.py,yes)
+	 if test "x$OSMOTESTEXT_CHECK" != "xyes" ; then
+		AC_MSG_ERROR([Please install osmocom-python to run the VTY tests.])
+	fi
+fi
+AC_MSG_CHECKING([whether to enable VTY tests])
+AC_MSG_RESULT([$enable_ext_tests])
+AM_CONDITIONAL(ENABLE_EXT_TESTS, test "x$enable_ext_tests" = "xyes")
 
 dnl Checks for typedefs, structures and compiler characteristics
 AC_ARG_WITH([pcap-config],
@@ -72,4 +87,5 @@ AC_OUTPUT(
     include/osmo-pcap/Makefile
     src/Makefile
     contrib/Makefile
+    tests/Makefile
     Makefile)

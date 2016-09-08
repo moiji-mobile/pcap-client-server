@@ -5,6 +5,7 @@ Makefile
 Makefile.in
 *.*~
 *.sw?
+*.pyc
 
 #configure
 aclocal.m4
@@ -27,3 +28,9 @@ osmopcapconfig.h*
 # apps
 src/osmo_pcap_client
 src/osmo_pcap_server
+
+# tests
+tests/atconfig
+tests/package.m4
+tests/testsuite
+tests/testsuite.log

@@ -1,6 +1,6 @@
 AUTOMAKE_OPTIONS = foreign dist-bzip2 1.6
 
-SUBDIRS = include src contrib
+SUBDIRS = include src contrib tests
 
 BUILT_SOURCES = $(top_srcdir)/.version
 EXTRA_DIST = git-version-gen .version
