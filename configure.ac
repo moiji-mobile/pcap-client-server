@@ -63,6 +63,7 @@ PKG_CHECK_MODULES(LIBOSMOCORE, libosmocore >= 0.3.2)
 PKG_CHECK_MODULES(LIBOSMOGSM, libosmogsm >= 0.3.2)
 PKG_CHECK_MODULES(LIBOSMOVTY, libosmovty >= 0.3.0)
 PKG_CHECK_MODULES(LIBZMQ, libzmq >= 3.2.2)
+PKG_CHECK_MODULES(LIBGNUTLS, gnutls)
 
 
 # Coverage build taken from WebKit's configure.in

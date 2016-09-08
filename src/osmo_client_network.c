@@ -47,6 +47,7 @@ static void _osmo_client_connect(void *_data)
 static void lost_connection(struct osmo_pcap_client *client)
 {
 	if (client->wqueue.bfd.fd >= 0) {
+		osmo_tls_release(&client->tls_session);
 		osmo_fd_unregister(&client->wqueue.bfd);
 		close(client->wqueue.bfd.fd);
 		client->wqueue.bfd.fd = -1;
@@ -98,6 +99,22 @@ static int write_cb(struct osmo_fd *fd, struct msgb *msg)
 	}
 
 	return 0;
+}
+
+static void handshake_done_cb(struct osmo_tls_session *session)
+{
+	struct osmo_pcap_client *client;
+
+	client = container_of(session, struct osmo_pcap_client, tls_session);
+	osmo_client_send_link(client);
+}
+
+static void tls_error_cb(struct osmo_tls_session *session)
+{
+	struct osmo_pcap_client *client;
+
+	client = container_of(session, struct osmo_pcap_client, tls_session);
+	lost_connection(client);
 }
 
 void osmo_client_send_data(struct osmo_pcap_client *client,
@@ -177,7 +194,6 @@ void osmo_client_connect(struct osmo_pcap_client *client)
 	client->wqueue.read_cb = read_cb;
 	client->wqueue.write_cb = write_cb;
 	client->wqueue.bfd.when = BSC_FD_READ;
-	client->wqueue.bfd.data = client;
 	osmo_wqueue_clear(&client->wqueue);
 
 	fd = osmo_sock_init(AF_INET, SOCK_STREAM, IPPROTO_TCP,
@@ -199,5 +215,26 @@ void osmo_client_connect(struct osmo_pcap_client *client)
 	}
 
 	rate_ctr_inc(&client->ctrg->ctr[CLIENT_CTR_CONNECT]);
-	osmo_client_send_link(client);
+
+	/*
+	 * The write queue needs to work differently for GNUtls. Before we can
+	 * send data we will need to complete handshake.
+	 */
+	if (client->tls_on) {
+		if (!osmo_tls_init_client_session(client)) {
+			lost_connection(client);
+			return;
+		}
+		client->tls_session.handshake_done = handshake_done_cb;
+		client->tls_session.error = tls_error_cb;
+	} else {
+		client->wqueue.bfd.cb = osmo_wqueue_bfd_cb;
+		client->wqueue.bfd.data = client;
+		osmo_client_send_link(client);
+	}
+}
+
+void osmo_client_reconnect(struct osmo_pcap_client *client)
+{
+	lost_connection(client);
 }

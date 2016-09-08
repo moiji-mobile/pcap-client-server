@@ -2,6 +2,7 @@ language: c
 os:
   - linux
 sudo: required
+dist: trusty
 addons:
   apt:
     packages:
@@ -18,6 +19,7 @@ addons:
       - libpcsclite-dev
       - libpcap-dev
       - libzmq3-dev
+      - libgnutls28-dev
 
 script:
   - contrib/travis.sh

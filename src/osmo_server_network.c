@@ -1,7 +1,7 @@
 /*
  * osmo-pcap-server code
  *
- * (C) 2011-2017 by Holger Hans Peter Freyther <holger@moiji-mobile.com>
+ * (C) 2011-2016 by Holger Hans Peter Freyther <holger@moiji-mobile.com>
  * (C) 2011 by On-Waves
  * All Rights Reserved
  *
@@ -129,14 +129,20 @@ void osmo_pcap_server_close_trace(struct osmo_pcap_conn *conn)
 
 static void close_connection(struct osmo_pcap_conn *conn)
 {
-	if (conn->rem_fd.fd >= 0) {
-		close(conn->rem_fd.fd);
-		conn->rem_fd.fd = -1;
-		osmo_fd_unregister(&conn->rem_fd);
+	if (conn->rem_wq.bfd.fd >= 0) {
+		close(conn->rem_wq.bfd.fd);
+		conn->rem_wq.bfd.fd = -1;
+		osmo_tls_release(&conn->tls_session);
+		osmo_fd_unregister(&conn->rem_wq.bfd);
 	}
 
 	osmo_pcap_server_close_trace(conn);
 	client_event(conn, "disconnect", NULL);
+}
+
+void osmo_pcap_server_close_conn(struct osmo_pcap_conn *conn)
+{
+	return close_connection(conn);
 }
 
 static void restart_pcap(struct osmo_pcap_conn *conn)
@@ -182,14 +188,13 @@ static void restart_pcap(struct osmo_pcap_conn *conn)
 	conn->last_write = *tm;
 }
 
-static void link_data(struct osmo_pcap_conn *conn, struct osmo_pcap_data *data)
+static int link_data(struct osmo_pcap_conn *conn, struct osmo_pcap_data *data)
 {
 	struct pcap_file_header *hdr;
 
 	if (data->len != sizeof(*hdr)) {
 		LOGP(DSERVER, LOGL_ERROR, "The pcap_file_header does not fit.\n");
-		close_connection(conn);
-		return;
+		return -1;
 	}
 
 	hdr = (struct pcap_file_header *) &data->data[0];
@@ -200,12 +205,14 @@ static void link_data(struct osmo_pcap_conn *conn, struct osmo_pcap_data *data)
 		conn->file_hdr = *hdr;
 		restart_pcap(conn);
 	}
+
+	return 1;
 }
 
 /*
  * Check if we are past the limit or on a day change
  */
-static void write_data(struct osmo_pcap_conn *conn, struct osmo_pcap_data *data)
+static int write_data(struct osmo_pcap_conn *conn, struct osmo_pcap_data *data)
 {
 	time_t now = time(NULL);
 	struct tm *tm = localtime(&now);
@@ -215,13 +222,12 @@ static void write_data(struct osmo_pcap_conn *conn, struct osmo_pcap_data *data)
 
 	if (conn->no_store) {
 		conn->last_write = *tm;
-		return;
+		return 1;
 	}
 
 	if (conn->local_fd < -1) {
 		LOGP(DSERVER, LOGL_ERROR, "No file is open. close connection.\n");
-		close_connection(conn);
-		return; 
+		return -1;
 	}
 
 	off_t cur = lseek(conn->local_fd, 0, SEEK_CUR);
@@ -239,8 +245,9 @@ static void write_data(struct osmo_pcap_conn *conn, struct osmo_pcap_data *data)
 	rc = write(conn->local_fd, &data->data[0], data->len);
 	if (rc != data->len) {
 		LOGP(DSERVER, LOGL_ERROR, "Failed to write for %s\n", conn->name);
-		close_connection(conn);
+		return -1;
 	}
+	return 1;
 }
 
 
@@ -303,7 +310,9 @@ struct osmo_pcap_conn *osmo_pcap_server_find(struct osmo_pcap_server *server,
 
 
 	conn->name = talloc_strdup(conn, name);
-	conn->rem_fd.fd = -1;
+	/* we never write */
+	osmo_wqueue_init(&conn->rem_wq, 0);
+	conn->rem_wq.bfd.fd = -1;
 	conn->local_fd = -1;
 	conn->server = server;
 	conn->data = (struct osmo_pcap_data *) &conn->buf[0];
@@ -311,14 +320,29 @@ struct osmo_pcap_conn *osmo_pcap_server_find(struct osmo_pcap_server *server,
 	return conn;
 }
 
-static int read_cb_initial(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
+static int do_read_tls(struct osmo_pcap_conn *conn, void *buf, size_t want_size)
+{
+	size_t size = want_size;
+	if (conn->tls_limit_read && size > conn->tls_limit_read)
+		size = conn->tls_limit_read;
+	return gnutls_record_recv(conn->tls_session.session, buf, size);
+}
+
+static int do_read(struct osmo_pcap_conn *conn, void *buf, size_t size)
+{
+	if (conn->direct_read)
+		return read(conn->rem_wq.bfd.fd, buf, size);
+	return do_read_tls(conn, buf, size);
+}
+
+static int read_cb_initial(struct osmo_pcap_conn *conn)
 {
 	int rc;
-	rc = read(fd->fd, &conn->buf[sizeof(*conn->data) - conn->pend], conn->pend);
+
+	rc = do_read(conn, &conn->buf[sizeof(*conn->data) - conn->pend], conn->pend);
 	if (rc <= 0) {
 		LOGP(DSERVER, LOGL_ERROR,
 		     "Too short packet. Got %d, wanted %d\n", rc, conn->data->len);
-		close_connection(conn);
 		return -1;
 	}
 
@@ -326,7 +350,6 @@ static int read_cb_initial(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
 	if (conn->pend < 0) {
 		LOGP(DSERVER, LOGL_ERROR,
 		     "Someone got the pending read wrong: %d\n", conn->pend);
-		close_connection(conn);
 		return -1;
 	} else if (conn->pend == 0) {
 		conn->data->len = ntohs(conn->data->len);
@@ -334,7 +357,6 @@ static int read_cb_initial(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
 		if (conn->data->len > SERVER_MAX_DATA_SIZE) {
 			LOGP(DSERVER, LOGL_ERROR,
 			     "Implausible data length: %u\n", conn->data->len);
-			close_connection(conn);
 			return -1;
 		}
 
@@ -342,17 +364,17 @@ static int read_cb_initial(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
 		conn->pend = conn->data->len;
 	}
 
-	return 0;
+	return 1;
 }
 
-static int read_cb_data(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
+static int read_cb_data(struct osmo_pcap_conn *conn)
 {
 	int rc;
-	rc = read(fd->fd, &conn->data->data[conn->data->len - conn->pend], conn->pend);
+
+	rc = do_read(conn, &conn->data->data[conn->data->len - conn->pend], conn->pend);
 	if (rc <= 0) {
 		LOGP(DSERVER, LOGL_ERROR,
 		     "Too short packet. Got %d, wanted %d\n", rc, conn->data->len);
-		close_connection(conn);
 		return -1;
 	}
 
@@ -360,7 +382,6 @@ static int read_cb_data(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
 	if (conn->pend < 0) {
 		LOGP(DSERVER, LOGL_ERROR,
 		     "Someone got the pending read wrong: %d\n", conn->pend);
-		close_connection(conn);
 		return -1;
 	} else if (conn->pend == 0) {
 		conn->state = STATE_INITIAL;
@@ -376,35 +397,79 @@ static int read_cb_data(struct osmo_fd *fd, struct osmo_pcap_conn *conn)
 
 		switch (conn->data->type) {
 		case PKT_LINK_HDR:
-			link_data(conn, conn->data);
+			return link_data(conn, conn->data);
 			break;
 		case PKT_LINK_DATA:
-			write_data(conn, conn->data);
+			return write_data(conn, conn->data);
 			break;
 		}
 	}
 
-	return 0;
+	return 1;
 }
 
-static int read_cb(struct osmo_fd *fd, unsigned int what)
+static int dispatch_read(struct osmo_pcap_conn *conn)
 {
-	struct osmo_pcap_conn *conn;
-
-	conn = fd->data;
-
 	if (conn->state == STATE_INITIAL) {
 		if (conn->reopen) {
 			LOGP(DSERVER, LOGL_INFO, "Reopening log for %s now.\n", conn->name);
 			restart_pcap(conn);
 			conn->reopen = 0;
 		}
-		return read_cb_initial(fd, conn);
+		return read_cb_initial(conn);
 	} else if (conn->state == STATE_DATA) {
-		return read_cb_data(fd, conn);
+		return read_cb_data(conn);
 	}
 
 	return 0;
+}
+
+static int read_cb(struct osmo_fd *fd)
+{
+	struct osmo_pcap_conn *conn;
+	int rc;
+
+	conn = fd->data;
+	rc = dispatch_read(conn);
+	if (rc <= 0)
+		close_connection(conn);
+	return 0;
+}
+
+static void tls_error_cb(struct osmo_tls_session *session)
+{
+	struct osmo_pcap_conn *conn;
+	conn = container_of(session, struct osmo_pcap_conn, tls_session);
+	close_connection(conn);
+}
+
+static int tls_read_cb(struct osmo_tls_session *session)
+{
+	struct osmo_pcap_conn *conn;
+	size_t pend;
+	int rc;
+
+	conn = container_of(session, struct osmo_pcap_conn, tls_session);
+	conn->tls_limit_read = 0;
+	rc = dispatch_read(conn);
+	if (rc <= 0)
+		return rc;
+
+	/**
+	 * This is a weakness of a single select approach and the
+	 * buffered reading here. We need to read everything as
+	 * otherwise we do not receive a ready-read. But at the
+	 * same time don't read more than is buffered! So cap what
+	 * can be read right now.
+	 */
+	while ((pend = osmo_tls_pending(session)) > 0) {
+		conn->tls_limit_read = pend;
+		rc = dispatch_read(conn);
+		if (rc <= 0)
+			return rc;
+	}
+
+	return 1;
 }
 
 static void new_connection(struct osmo_pcap_server *server,
@@ -413,21 +478,40 @@ static void new_connection(struct osmo_pcap_server *server,
 	close_connection(client);
 
 	memset(&client->file_hdr, 0, sizeof(client->file_hdr));
-	client->rem_fd.fd = new_fd;
-	if (osmo_fd_register(&client->rem_fd) != 0) {
+	client->rem_wq.bfd.fd = new_fd;
+	if (osmo_fd_register(&client->rem_wq.bfd) != 0) {
 		LOGP(DSERVER, LOGL_ERROR, "Failed to register fd.\n");
-		client->rem_fd.fd = -1;
+		client->rem_wq.bfd.fd = -1;
 		close(new_fd);
 		return;
 	}
 
 	rate_ctr_inc(&client->ctrg->ctr[PEER_CTR_CONNECT]);
 
-	client->rem_fd.data = client;
-	client->rem_fd.when = BSC_FD_READ;
-	client->rem_fd.cb = read_cb;
 	client->state = STATE_INITIAL;
 	client->pend = sizeof(*client->data);
+
+	if (client->tls_use && !server->tls_on) {
+		LOGP(DSERVER, LOGL_NOTICE,
+			"Require TLS but not enabled on conn=%s\n",
+			client->name);
+		close_connection(client);
+		return;
+	} else if (client->tls_use) {
+		if (!osmo_tls_init_server_session(client, server)) {
+			close_connection(client);
+			return;
+		}
+		client->tls_session.error = tls_error_cb;
+		client->tls_session.read = tls_read_cb;
+		client->direct_read = false;
+	} else {
+		client->rem_wq.bfd.cb = osmo_wqueue_bfd_cb;
+		client->rem_wq.bfd.data = client;
+		client->rem_wq.bfd.when = BSC_FD_READ;
+		client->rem_wq.read_cb = read_cb;
+		client->direct_read = true;
+	}
 }
 
 static int accept_cb(struct osmo_fd *fd, unsigned int when)
@@ -460,6 +544,12 @@ static int accept_cb(struct osmo_fd *fd, unsigned int when)
 	}
 
 	rate_ctr_inc(&server->ctrg->ctr[SERVER_CTR_NOCLIENT]);
+
+	/*
+	 * TODO: In the future start with a tls handshake and see if we know
+	 * this client.
+	 */
+
 	LOGP(DSERVER, LOGL_ERROR,
 	     "Failed to find client for %s\n", inet_ntoa(addr.sin_addr));
 	close(new_fd);

@@ -1,0 +1,16 @@
+= Goals
+
+Secure communication between client and server. The captured
+data might go through different interfaces than the one used
+for capturing.
+
+Instead of rolling a custom protocol the idea is to adopt TLS
+1.2 to achieve client authentication and ciphering.
+
+Neither the client nor the server should block during the key
+exchange. Most TLS implementations do block and this is a problem
+for a single threaded server. Ideally the same library is used
+in the client and the server.
+
+In practice libraries might block during the handshake and this
+is a big deal for the server (other clients block).

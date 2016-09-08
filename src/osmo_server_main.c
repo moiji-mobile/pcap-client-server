@@ -22,6 +22,7 @@
 
 #include <osmo-pcap/common.h>
 #include <osmo-pcap/osmo_pcap_server.h>
+#include <osmo-pcap/osmo_tls.h>
 
 #include <osmocom/core/application.h>
 #include <osmocom/core/rate_ctr.h>
@@ -216,6 +217,8 @@ int main(int argc, char **argv)
 	osmo_init_ignore_signals();
 	signal(SIGHUP, &signal_handler);
 
+	osmo_tls_init();
+
 	rc = telnet_init(tall_bsc_ctx, NULL, 4241);
 	if (rc < 0) {
 		LOGP(DCLIENT, LOGL_ERROR, "Failed to bind telnet interface\n");
@@ -243,6 +246,8 @@ int main(int argc, char **argv)
 		     "Failed to parse the config file: %s\n", config_file);
 		exit(1);
 	}
+
+	osmo_tls_server_init(pcap_server);
 
 	/* attempt to connect to the remote */
 	if (osmo_pcap_server_listen(pcap_server) != 0) {

@@ -41,6 +41,45 @@ static struct cmd_node server_node = {
 	1,
 };
 
+static void write_tls(struct vty *vty, struct osmo_pcap_server *pcap_server)
+{
+	if (!pcap_server->tls_on)
+		return;
+
+	vty_out(vty, " enable tls%s", VTY_NEWLINE);
+	vty_out(vty, " tls log-level %d%s",
+		pcap_server->tls_log_level, VTY_NEWLINE);
+
+	if (pcap_server->tls_allow_anon)
+		vty_out(vty, " tls allow-auth anonymous%s", VTY_NEWLINE);
+
+	if (pcap_server->tls_allow_x509)
+		vty_out(vty, " tls allow-auth x509%s", VTY_NEWLINE);
+
+	if (pcap_server->tls_priority)
+		vty_out(vty, " tls priority %s%s",
+			pcap_server->tls_priority, VTY_NEWLINE);
+	if (pcap_server->tls_capath)
+		vty_out(vty, " tls capath %s%s", pcap_server->tls_capath, VTY_NEWLINE);
+
+	if (pcap_server->tls_crlfile)
+		vty_out(vty, " tls crlfile %s%s", pcap_server->tls_crlfile, VTY_NEWLINE);
+
+	if (pcap_server->tls_server_cert)
+		vty_out(vty, " tls server-cert %s%s",
+			pcap_server->tls_server_cert, VTY_NEWLINE);
+
+	if (pcap_server->tls_server_key)
+		vty_out(vty, " tls server-key %s%s",
+			pcap_server->tls_server_key, VTY_NEWLINE);
+
+	if (pcap_server->tls_dh_pkcs3)
+		vty_out(vty, " tls dh pkcs3 %s%s",
+			pcap_server->tls_dh_pkcs3, VTY_NEWLINE);
+	else
+		vty_out(vty, " tls dh generate%s", VTY_NEWLINE);
+}
+
 static int config_write_server(struct vty *vty)
 {
 	struct osmo_pcap_conn *conn;
@@ -59,10 +98,13 @@ static int config_write_server(struct vty *vty)
 		vty_out(vty, " zeromq-publisher %s %d%s",
 			pcap_server->zmq_ip, pcap_server->zmq_port, VTY_NEWLINE);
 
+	write_tls(vty, pcap_server);
+
 	llist_for_each_entry(conn, &pcap_server->conn, entry) {
-		vty_out(vty, " client %s %s%s%s",
+		vty_out(vty, " client %s %s%s%s%s",
 			conn->name, conn->remote_host,
-			conn->no_store ? " no-store" : "",
+			conn->no_store ? " no-store" : " store",
+			conn->tls_use ? " tls" : "",
 			VTY_NEWLINE);
 	}
 
@@ -116,30 +158,60 @@ DEFUN(cfg_server_max_size,
 	return CMD_SUCCESS;
 }
 
-DEFUN(cfg_server_client,
-      cfg_server_client_cmd,
-      "client NAME A.B.C.D [no-store]",
-      CLIENT_STR "Remote name used in filenames\n" "IP of the remote\n" "Do not store traffic\n")
+static int manage_client(struct osmo_pcap_server *pcap_server,
+			struct vty *vty,
+			const char *name, const char *remote_host,
+			bool no_store, bool use_tls)
 {
 	struct osmo_pcap_conn *conn;
-	conn = osmo_pcap_server_find(pcap_server, argv[0]);
+	conn = osmo_pcap_server_find(pcap_server, name);
 	if (!conn) {
 		vty_out(vty, "Failed to create a pcap server.\n");
 		return CMD_WARNING;
 	}
 
 	talloc_free(conn->remote_host);
-	conn->remote_host = talloc_strdup(pcap_server, argv[1]);
-	inet_aton(argv[1], &conn->remote_addr);
+	conn->remote_host = talloc_strdup(pcap_server, remote_host);
+	inet_aton(remote_host, &conn->remote_addr);
 
 	/* Checking no-store and maybe closing a pcap file */
-	if (argc >= 3) {
+	if (no_store) {
 		osmo_pcap_server_close_trace(conn);
 		conn->no_store = 1;
 	} else
 		conn->no_store = 0;
 
+	if (use_tls) {
+		/* force moving to TLS */
+		if (!conn->tls_use)
+			osmo_pcap_server_close_conn(conn);
+		conn->tls_use = true;
+	} else {
+		conn->tls_use = false;
+	}
+
 	return CMD_SUCCESS;
+}
+
+
+DEFUN(cfg_server_client,
+      cfg_server_client_cmd,
+      "client NAME A.B.C.D [no-store] [tls]",
+      CLIENT_STR "Remote name used in filenames\n"
+      "IP of the remote\n" "Do not store traffic\n"
+      "Use Transport Level Security\n")
+{
+	return manage_client(pcap_server, vty, argv[0], argv[1], argc >= 3, argc >= 4);
+}
+
+DEFUN(cfg_server_client_store_tls,
+      cfg_server_client_store_tls_cmd,
+      "client NAME A.B.C.D store [tls]",
+      CLIENT_STR "Remote name used in filenames\n"
+      "IP of the remote\n" "Do not store traffic\n"
+      "Use Transport Level Security\n")
+{
+	return manage_client(pcap_server, vty, argv[0], argv[1], false, argc >= 3);
 }
 
 DEFUN(cfg_server_no_client,
@@ -241,6 +313,195 @@ DEFUN(cfg_no_server_zmq_ip_port,
 	return CMD_SUCCESS;
 }
 
+#define TLS_STR "Transport Layer Security\n"
+
+DEFUN(cfg_enable_tls,
+      cfg_enable_tls_cmd,
+      "enable tls",
+      "Enable\n" "Transport Layer Security\n")
+{
+	pcap_server->tls_on = true;
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_disable_tls,
+      cfg_disable_tls_cmd,
+      "disable tls",
+      "Disable\n" "Transport Layer Security\n")
+{
+	pcap_server->tls_on = false;
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_tls_log_level,
+      cfg_tls_log_level_cmd,
+      "tls log-level <0-255>",
+      TLS_STR "Log-level\n" "GNUtls debug level\n")
+{
+	pcap_server->tls_log_level = atoi(argv[0]);
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_tls_allow_anon,
+      cfg_tls_allow_anon_cmd,
+      "tls allow-auth anonymous",
+      TLS_STR "allow authentication\n" "for anonymous\n")
+{
+	pcap_server->tls_allow_anon = true;
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_no_tls_allow_anon,
+      cfg_no_tls_allow_anon_cmd,
+      "no tls allow-auth anonymous",
+      NO_STR TLS_STR "allow authentication\n" "for anonymous\n")
+{
+	pcap_server->tls_allow_anon = false;
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_tls_allow_x509,
+      cfg_tls_allow_x509_cmd,
+      "tls allow-auth x509",
+      TLS_STR "allow authentication\n" "for certificates\n")
+{
+	pcap_server->tls_allow_x509 = true;
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_no_tls_allow_x509,
+      cfg_no_tls_allow_x509_cmd,
+      "no tls allow-auth x509",
+      NO_STR TLS_STR "allow authentication\n" "for certificates\n")
+{
+	pcap_server->tls_allow_x509 = false;
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_tls_priority,
+      cfg_tls_priority_cmd,
+      "tls priority STR",
+      TLS_STR "Priority string for GNUtls\n" "Priority string\n")
+{
+	talloc_free(pcap_server->tls_priority);
+	pcap_server->tls_priority = talloc_strdup(pcap_server, argv[0]);
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_no_tls_priority,
+      cfg_no_tls_priority_cmd,
+      "no tls priority",
+      NO_STR TLS_STR "Priority string for GNUtls\n")
+{
+	talloc_free(pcap_server->tls_priority);
+	pcap_server->tls_priority = NULL;
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_tls_capath,
+      cfg_tls_capath_cmd,
+      "tls capath .PATH",
+      TLS_STR "Trusted root certificates\n" "Filename\n")
+{
+	talloc_free(pcap_server->tls_capath);
+	pcap_server->tls_capath = talloc_strdup(pcap_server, argv[0]);
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_no_tls_capath,
+      cfg_no_tls_capath_cmd,
+      "no tls capath",
+      NO_STR TLS_STR "Trusted root certificates\n")
+{
+	talloc_free(pcap_server->tls_capath);
+	pcap_server->tls_capath = NULL;
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_tls_crlfile,
+      cfg_tls_crlfile_cmd,
+      "tls crlfile .PATH",
+      TLS_STR "CRL file\n" "Filename\n")
+{
+	talloc_free(pcap_server->tls_crlfile);
+	pcap_server->tls_crlfile = talloc_strdup(pcap_server, argv[0]);
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_no_tls_crlfile,
+      cfg_no_tls_crlfile_cmd,
+      "no tls crlfile",
+      NO_STR TLS_STR "CRL file\n")
+{
+	talloc_free(pcap_server->tls_crlfile);
+	pcap_server->tls_crlfile = NULL;
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_tls_server_cert,
+      cfg_tls_server_cert_cmd,
+      "tls server-cert .PATH",
+      TLS_STR "Server certificate\n" "Filename\n")
+{
+	talloc_free(pcap_server->tls_server_cert);
+	pcap_server->tls_server_cert = talloc_strdup(pcap_server, argv[0]);
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_no_tls_server_cert,
+      cfg_no_tls_server_cert_cmd,
+      "no tls server-cert",
+      NO_STR TLS_STR "Server certificate\n")
+{
+	talloc_free(pcap_server->tls_server_cert);
+	pcap_server->tls_server_cert = NULL;
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_tls_server_key,
+      cfg_tls_server_key_cmd,
+      "tls server-key .PATH",
+      TLS_STR "Server private key\n" "Filename\n")
+{
+	talloc_free(pcap_server->tls_server_key);
+	pcap_server->tls_server_key = talloc_strdup(pcap_server, argv[0]);
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_no_tls_server_key,
+      cfg_no_tls_server_key_cmd,
+      "no tls server-key",
+      NO_STR TLS_STR "Server private key\n")
+{
+	talloc_free(pcap_server->tls_server_key);
+	pcap_server->tls_server_key = NULL;
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_tls_dh_pkcs3,
+      cfg_tls_dh_pkcs3_cmd,
+      "tls dh pkcs .FILE",
+      TLS_STR "Diffie-Hellman Key Exchange\n" "PKCS3\n" "Filename\n")
+{
+	talloc_free(pcap_server->tls_dh_pkcs3);
+	pcap_server->tls_dh_pkcs3 = talloc_strdup(pcap_server, argv[0]);
+
+	osmo_tls_dh_load(pcap_server);
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_tls_dh_generate,
+      cfg_tls_dh_generate_cmd,
+      "tls dh generate",
+      TLS_STR "Diffie-Hellman Key Exchange\n" "Generate prime\n")
+{
+	talloc_free(pcap_server->tls_dh_pkcs3);
+	pcap_server->tls_dh_pkcs3 = NULL;
+
+	osmo_tls_dh_generate(pcap_server);
+	return CMD_SUCCESS;
+}
+
 void vty_server_init(struct osmo_pcap_server *server)
 {
 	install_element(CONFIG_NODE, &cfg_server_cmd);
@@ -254,6 +515,28 @@ void vty_server_init(struct osmo_pcap_server *server)
 	install_element(SERVER_NODE, &cfg_server_zmq_ip_port_cmd);
 	install_element(SERVER_NODE, &cfg_no_server_zmq_ip_port_cmd);
 
+	/* tls for the server */
+	install_element(SERVER_NODE, &cfg_enable_tls_cmd);
+	install_element(SERVER_NODE, &cfg_disable_tls_cmd);
+	install_element(SERVER_NODE, &cfg_tls_log_level_cmd);
+	install_element(SERVER_NODE, &cfg_tls_allow_anon_cmd);
+	install_element(SERVER_NODE, &cfg_no_tls_allow_anon_cmd);
+	install_element(SERVER_NODE, &cfg_tls_allow_x509_cmd);
+	install_element(SERVER_NODE, &cfg_no_tls_allow_x509_cmd);
+	install_element(SERVER_NODE, &cfg_tls_priority_cmd);
+	install_element(SERVER_NODE, &cfg_no_tls_priority_cmd);
+	install_element(SERVER_NODE, &cfg_tls_capath_cmd);
+	install_element(SERVER_NODE, &cfg_no_tls_capath_cmd);
+	install_element(SERVER_NODE, &cfg_tls_crlfile_cmd);
+	install_element(SERVER_NODE, &cfg_no_tls_crlfile_cmd);
+	install_element(SERVER_NODE, &cfg_tls_server_cert_cmd);
+	install_element(SERVER_NODE, &cfg_no_tls_server_cert_cmd);
+	install_element(SERVER_NODE, &cfg_tls_server_key_cmd);
+	install_element(SERVER_NODE, &cfg_no_tls_server_key_cmd);
+	install_element(SERVER_NODE, &cfg_tls_dh_generate_cmd);
+	install_element(SERVER_NODE, &cfg_tls_dh_pkcs3_cmd);
+
 	install_element(SERVER_NODE, &cfg_server_client_cmd);
+	install_element(SERVER_NODE, &cfg_server_client_store_tls_cmd);
 	install_element(SERVER_NODE, &cfg_server_no_client_cmd);
 }
