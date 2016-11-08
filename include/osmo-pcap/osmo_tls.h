@@ -28,7 +28,7 @@
 
 struct osmo_fd;
 struct osmo_wqueue;
-struct osmo_pcap_client;
+struct osmo_pcap_client_conn;
 struct osmo_pcap_conn;
 struct osmo_pcap_server;
 
@@ -65,7 +65,7 @@ struct osmo_tls_session {
 
 void osmo_tls_init(void);
 
-bool osmo_tls_init_client_session(struct osmo_pcap_client *client);
+bool osmo_tls_init_client_session(struct osmo_pcap_client_conn *conn);
 
 
 bool osmo_tls_init_server_session(struct osmo_pcap_conn *conn, struct osmo_pcap_server *server);

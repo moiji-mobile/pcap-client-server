@@ -62,33 +62,33 @@ static int config_write_client(struct vty *vty)
 	if (pcap_client->gprs_filtering)
 		vty_out(vty, " pcap add-filter gprs%s", VTY_NEWLINE);
 
-	if (pcap_client->tls_on) {
+	if (pcap_client->conn.tls_on) {
 		vty_out(vty, " enable tls%s", VTY_NEWLINE);
-		vty_out(vty, " tls hostname %s%s", pcap_client->tls_hostname, VTY_NEWLINE);
+		vty_out(vty, " tls hostname %s%s", pcap_client->conn.tls_hostname, VTY_NEWLINE);
 		vty_out(vty, " %stls verify-cert%s",
-				pcap_client->tls_verify ? "" : "no ", VTY_NEWLINE);
-		if (pcap_client->tls_capath)
-			vty_out(vty, " tls capath %s%s", pcap_client->tls_capath, VTY_NEWLINE);
-		if (pcap_client->tls_client_cert)
+				pcap_client->conn.tls_verify ? "" : "no ", VTY_NEWLINE);
+		if (pcap_client->conn.tls_capath)
+			vty_out(vty, " tls capath %s%s", pcap_client->conn.tls_capath, VTY_NEWLINE);
+		if (pcap_client->conn.tls_client_cert)
 			vty_out(vty, " tls client-cert %s%s",
-					pcap_client->tls_client_cert, VTY_NEWLINE);
-		if (pcap_client->tls_client_key)
+					pcap_client->conn.tls_client_cert, VTY_NEWLINE);
+		if (pcap_client->conn.tls_client_key)
 			vty_out(vty, " tls client-key %s%s",
-					pcap_client->tls_client_key, VTY_NEWLINE);
-		if (pcap_client->tls_priority)
+					pcap_client->conn.tls_client_key, VTY_NEWLINE);
+		if (pcap_client->conn.tls_priority)
 			vty_out(vty, " tls priority %s%s",
-					pcap_client->tls_priority, VTY_NEWLINE);
+					pcap_client->conn.tls_priority, VTY_NEWLINE);
 		vty_out(vty, " tls log-level %d%s",
-			pcap_client->tls_log_level, VTY_NEWLINE);
+			pcap_client->conn.tls_log_level, VTY_NEWLINE);
 	}
 
-	if (pcap_client->srv_ip)
+	if (pcap_client->conn.srv_ip)
 		vty_out(vty, " server ip %s%s",
-			pcap_client->srv_ip, VTY_NEWLINE);
+			pcap_client->conn.srv_ip, VTY_NEWLINE);
 
-	if (pcap_client->srv_port > 0)
+	if (pcap_client->conn.srv_port > 0)
 		vty_out(vty, " server port %d%s",
-			pcap_client->srv_port, VTY_NEWLINE);
+			pcap_client->conn.srv_port, VTY_NEWLINE);
 
 	return CMD_SUCCESS;
 }
@@ -159,12 +159,12 @@ DEFUN(cfg_enable_tls,
       "enable tls",
       "Enable\n" "Transport Layer Security\n")
 {
-	if (!pcap_client->tls_on) {
-		if (pcap_client->wqueue.bfd.fd >= 0)
-			osmo_client_reconnect(pcap_client);
+	if (!pcap_client->conn.tls_on) {
+		if (pcap_client->conn.wqueue.bfd.fd >= 0)
+			osmo_client_reconnect(&pcap_client->conn);
 	}
 
-	pcap_client->tls_on = true;
+	pcap_client->conn.tls_on = true;
 	return CMD_SUCCESS;
 }
 
@@ -173,10 +173,10 @@ DEFUN(cfg_disable_tls,
       "disable tls",
       "Disable\n" "Transport Layer Security\n")
 {
-	if (pcap_client->tls_on)
-		osmo_client_reconnect(pcap_client);
+	if (pcap_client->conn.tls_on)
+		osmo_client_reconnect(&pcap_client->conn);
 
-	pcap_client->tls_on = false;
+	pcap_client->conn.tls_on = false;
 	return CMD_SUCCESS;
 }
 
@@ -185,8 +185,8 @@ DEFUN(cfg_tls_hostname,
       "tls hostname NAME",
       TLS_STR "hostname for certificate validation\n" "name\n")
 {
-	talloc_free(pcap_client->tls_hostname);
-	pcap_client->tls_hostname = talloc_strdup(pcap_client, argv[0]);
+	talloc_free(pcap_client->conn.tls_hostname);
+	pcap_client->conn.tls_hostname = talloc_strdup(pcap_client, argv[0]);
 	return CMD_SUCCESS;
 }
 
@@ -195,8 +195,8 @@ DEFUN(cfg_no_tls_hostname,
       "no tls hostname",
       NO_STR TLS_STR "hostname for certificate validation\n")
 {
-	talloc_free(pcap_client->tls_hostname);
-	pcap_client->tls_hostname = NULL;
+	talloc_free(pcap_client->conn.tls_hostname);
+	pcap_client->conn.tls_hostname = NULL;
 	return CMD_SUCCESS;
 }
 
@@ -205,7 +205,7 @@ DEFUN(cfg_tls_verify,
       "tls verify-cert",
       TLS_STR "Verify certificates\n")
 {
-	pcap_client->tls_verify = true;
+	pcap_client->conn.tls_verify = true;
 	return CMD_SUCCESS;
 }
 
@@ -214,7 +214,7 @@ DEFUN(cfg_no_tls_verify,
       "no tls verify-cert",
       NO_STR TLS_STR "Verify certificates\n")
 {
-	pcap_client->tls_verify = false;
+	pcap_client->conn.tls_verify = false;
 	return CMD_SUCCESS;
 }
 
@@ -223,8 +223,8 @@ DEFUN(cfg_tls_capath,
       "tls capath .PATH",
       TLS_STR "Trusted root certificates\n" "Filename\n")
 {
-	talloc_free(pcap_client->tls_capath);
-	pcap_client->tls_capath = talloc_strdup(pcap_client, argv[0]);
+	talloc_free(pcap_client->conn.tls_capath);
+	pcap_client->conn.tls_capath = talloc_strdup(pcap_client, argv[0]);
 	return CMD_SUCCESS;
 }
 
@@ -233,8 +233,8 @@ DEFUN(cfg_no_tls_capath,
       "no tls capath",
       NO_STR TLS_STR "Trusted root certificates\n")
 {
-	talloc_free(pcap_client->tls_capath);
-	pcap_client->tls_capath = NULL;
+	talloc_free(pcap_client->conn.tls_capath);
+	pcap_client->conn.tls_capath = NULL;
 	return CMD_SUCCESS;
 }
 
@@ -243,8 +243,8 @@ DEFUN(cfg_tls_client_cert,
       "tls client-cert .PATH",
       TLS_STR "Client certificate for authentication\n" "Filename\n")
 {
-	talloc_free(pcap_client->tls_client_cert);
-	pcap_client->tls_client_cert = talloc_strdup(pcap_client, argv[0]);
+	talloc_free(pcap_client->conn.tls_client_cert);
+	pcap_client->conn.tls_client_cert = talloc_strdup(pcap_client, argv[0]);
 	return CMD_SUCCESS;
 }
 
@@ -253,8 +253,8 @@ DEFUN(cfg_no_tls_client_cert,
       "no tls client-cert",
       NO_STR TLS_STR "Client certificate for authentication\n")
 {
-	talloc_free(pcap_client->tls_client_cert);
-	pcap_client->tls_client_cert = NULL;
+	talloc_free(pcap_client->conn.tls_client_cert);
+	pcap_client->conn.tls_client_cert = NULL;
 	return CMD_SUCCESS;
 }
 
@@ -263,8 +263,8 @@ DEFUN(cfg_tls_client_key,
       "tls client-key .PATH",
       TLS_STR "Client private key\n" "Filename\n")
 {
-	talloc_free(pcap_client->tls_client_key);
-	pcap_client->tls_client_key = talloc_strdup(pcap_client, argv[0]);
+	talloc_free(pcap_client->conn.tls_client_key);
+	pcap_client->conn.tls_client_key = talloc_strdup(pcap_client, argv[0]);
 	return CMD_SUCCESS;
 }
 
@@ -273,8 +273,8 @@ DEFUN(cfg_no_tls_client_key,
       "no tls client-key",
       NO_STR TLS_STR "Client private key\n")
 {
-	talloc_free(pcap_client->tls_client_key);
-	pcap_client->tls_client_key = NULL;
+	talloc_free(pcap_client->conn.tls_client_key);
+	pcap_client->conn.tls_client_key = NULL;
 	return CMD_SUCCESS;
 }
 
@@ -283,8 +283,8 @@ DEFUN(cfg_tls_priority,
       "tls priority STR",
       TLS_STR "Priority string for GNUtls\n" "Priority string\n")
 {
-	talloc_free(pcap_client->tls_priority);
-	pcap_client->tls_priority = talloc_strdup(pcap_client, argv[0]);
+	talloc_free(pcap_client->conn.tls_priority);
+	pcap_client->conn.tls_priority = talloc_strdup(pcap_client, argv[0]);
 	return CMD_SUCCESS;
 }
 
@@ -293,8 +293,8 @@ DEFUN(cfg_no_tls_priority,
       "no tls priority",
       NO_STR TLS_STR "Priority string for GNUtls\n")
 {
-	talloc_free(pcap_client->tls_priority);
-	pcap_client->tls_priority = NULL;
+	talloc_free(pcap_client->conn.tls_priority);
+	pcap_client->conn.tls_priority = NULL;
 	return CMD_SUCCESS;
 }
 
@@ -303,7 +303,7 @@ DEFUN(cfg_tls_log_level,
       "tls log-level <0-255>",
       TLS_STR "Log-level\n" "GNUtls debug level\n")
 {
-	pcap_client->tls_log_level = atoi(argv[0]);
+	pcap_client->conn.tls_log_level = atoi(argv[0]);
 	return CMD_SUCCESS;
 }
 
@@ -312,8 +312,8 @@ DEFUN(cfg_server_ip,
       "server ip A.B.C.D",
       SERVER_STRING "IP Address of the server\n" "IP\n")
 {
-	talloc_free(pcap_client->srv_ip);
-	pcap_client->srv_ip = talloc_strdup(pcap_client, argv[0]);
+	talloc_free(pcap_client->conn.srv_ip);
+	pcap_client->conn.srv_ip = talloc_strdup(pcap_client, argv[0]);
 	return CMD_SUCCESS;
 }
 
@@ -322,7 +322,7 @@ DEFUN(cfg_server_port,
       "server port <1-65535>",
       SERVER_STRING "Port\n" "Number\n")
 {
-	pcap_client->srv_port = atoi(argv[0]);
+	pcap_client->conn.srv_port = atoi(argv[0]);
 	return CMD_SUCCESS;
 }
 

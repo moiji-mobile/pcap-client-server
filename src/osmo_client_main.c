@@ -218,12 +218,13 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 	pcap_client->fd.fd = -1;
-	pcap_client->tls_verify = true;
+	pcap_client->conn.tls_verify = true;
 	vty_client_init(pcap_client);
 
 	/* initialize the queue */
-	osmo_wqueue_init(&pcap_client->wqueue, 10);
-	pcap_client->wqueue.bfd.fd = -1;
+	pcap_client->conn.client = pcap_client;
+	osmo_wqueue_init(&pcap_client->conn.wqueue, 10);
+	pcap_client->conn.wqueue.bfd.fd = -1;
 
 	/* initialize the stats interface */
 	pcap_client->ctrg = rate_ctr_group_alloc(pcap_client, &pcap_client_ctr_group_desc, 0);
@@ -239,7 +240,7 @@ int main(int argc, char **argv)
 	}
 
 	/* attempt to connect to the remote */
-	osmo_client_connect(pcap_client);
+	osmo_client_connect(&pcap_client->conn);
 
 	if (daemonize) {
 		rc = osmo_daemonize();

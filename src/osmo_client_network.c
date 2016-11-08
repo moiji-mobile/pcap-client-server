@@ -41,10 +41,10 @@
 
 static void _osmo_client_connect(void *_data)
 {
-	osmo_client_connect((struct osmo_pcap_client *) _data);
+	osmo_client_connect((struct osmo_pcap_client_conn *) _data);
 }
 
-static void lost_connection(struct osmo_pcap_client *client)
+static void lost_connection(struct osmo_pcap_client_conn *client)
 {
 	if (client->wqueue.bfd.fd >= 0) {
 		osmo_tls_release(&client->tls_session);
@@ -59,11 +59,11 @@ static void lost_connection(struct osmo_pcap_client *client)
 	osmo_timer_schedule(&client->timer, 2, 0);
 }
 
-static void write_data(struct osmo_pcap_client *client, struct msgb *msg)
+static void write_data(struct osmo_pcap_client_conn *conn, struct msgb *msg)
 {
-	if (osmo_wqueue_enqueue(&client->wqueue, msg) != 0) {
+	if (osmo_wqueue_enqueue(&conn->wqueue, msg) != 0) {
 		LOGP(DCLIENT, LOGL_ERROR, "Failed to enqueue.\n");
-		rate_ctr_inc(&client->ctrg->ctr[CLIENT_CTR_QERR]);
+		rate_ctr_inc(&conn->client->ctrg->ctr[CLIENT_CTR_QERR]);
 		msgb_free(msg);
 		return;
 	}
@@ -76,7 +76,7 @@ static int read_cb(struct osmo_fd *fd)
 
 	rc = read(fd->fd, buf, sizeof(buf));
 	if (rc <= 0) {
-		struct osmo_pcap_client *client = fd->data;
+		struct osmo_pcap_client_conn *client = fd->data;
 		LOGP(DCLIENT, LOGL_ERROR, "Lost connection on read.\n");
 		lost_connection(client);
 		return -1;
@@ -91,10 +91,11 @@ static int write_cb(struct osmo_fd *fd, struct msgb *msg)
 
 	rc = write(fd->fd, msg->data, msg->len);
 	if (rc < 0) {
-		struct osmo_pcap_client *client = fd->data;
-		LOGP(DCLIENT, LOGL_ERROR, "Lost connection on write.\n");
-		rate_ctr_inc(&client->ctrg->ctr[CLIENT_CTR_WERR]);
-		lost_connection(client);
+		struct osmo_pcap_client_conn *conn = fd->data;
+		LOGP(DCLIENT, LOGL_ERROR, "Lost connection on write to %s:%d.\n",
+			conn->srv_ip, conn->srv_port);
+		rate_ctr_inc(&conn->client->ctrg->ctr[CLIENT_CTR_WERR]);
+		lost_connection(conn);
 		return -1;
 	}
 
@@ -103,21 +104,21 @@ static int write_cb(struct osmo_fd *fd, struct msgb *msg)
 
 static void handshake_done_cb(struct osmo_tls_session *session)
 {
-	struct osmo_pcap_client *client;
+	struct osmo_pcap_client_conn *client;
 
-	client = container_of(session, struct osmo_pcap_client, tls_session);
+	client = container_of(session, struct osmo_pcap_client_conn, tls_session);
 	osmo_client_send_link(client);
 }
 
 static void tls_error_cb(struct osmo_tls_session *session)
 {
-	struct osmo_pcap_client *client;
+	struct osmo_pcap_client_conn *client;
 
-	client = container_of(session, struct osmo_pcap_client, tls_session);
+	client = container_of(session, struct osmo_pcap_client_conn, tls_session);
 	lost_connection(client);
 }
 
-void osmo_client_send_data(struct osmo_pcap_client *client,
+void osmo_client_send_data(struct osmo_pcap_client_conn *conn,
 			   struct pcap_pkthdr *in_hdr, const uint8_t *data)
 {
 	struct osmo_pcap_data *om_hdr;
@@ -127,14 +128,14 @@ void osmo_client_send_data(struct osmo_pcap_client *client,
 	if (in_hdr->caplen > 9000) {
 		LOGP(DCLIENT, LOGL_ERROR,
 			"Capture len too big %zu\n", in_hdr->caplen);
-		rate_ctr_inc(&client->ctrg->ctr[CLIENT_CTR_2BIG]);
+		rate_ctr_inc(&conn->client->ctrg->ctr[CLIENT_CTR_2BIG]);
 		return;
 	}
 
 	msg = msgb_alloc(9000 + sizeof(*om_hdr) + sizeof(*hdr), "data-data");
 	if (!msg) {
 		LOGP(DCLIENT, LOGL_ERROR, "Failed to allocate.\n");
-		rate_ctr_inc(&client->ctrg->ctr[CLIENT_CTR_NOMEM]);
+		rate_ctr_inc(&conn->client->ctrg->ctr[CLIENT_CTR_NOMEM]);
 		return;
 	}
 
@@ -152,13 +153,13 @@ void osmo_client_send_data(struct osmo_pcap_client *client,
 	memcpy(msg->l3h, data, in_hdr->caplen);
 
 	om_hdr->len = htons(msgb_l2len(msg));
-	rate_ctr_add(&client->ctrg->ctr[CLIENT_CTR_BYTES], hdr->caplen);
-	rate_ctr_inc(&client->ctrg->ctr[CLIENT_CTR_PKTS]);
+	rate_ctr_add(&conn->client->ctrg->ctr[CLIENT_CTR_BYTES], hdr->caplen);
+	rate_ctr_inc(&conn->client->ctrg->ctr[CLIENT_CTR_PKTS]);
 
-	write_data(client, msg);
+	write_data(conn, msg);
 }
 
-void osmo_client_send_link(struct osmo_pcap_client *client)
+void osmo_client_send_link(struct osmo_pcap_client_conn *conn)
 {
 	struct pcap_file_header *hdr;
 	struct osmo_pcap_data *om_hdr;
@@ -182,59 +183,59 @@ void osmo_client_send_link(struct osmo_pcap_client *client)
 	hdr->thiszone = 0;
 	hdr->sigfigs = 0;
 	hdr->snaplen = UINT_MAX;
-	hdr->linktype = pcap_datalink(client->handle);
+	hdr->linktype = pcap_datalink(conn->client->handle);
 
-	write_data(client, msg);
+	write_data(conn, msg);
 }
 
-void osmo_client_connect(struct osmo_pcap_client *client)
+void osmo_client_connect(struct osmo_pcap_client_conn *conn)
 {
 	int fd;
 
-	client->wqueue.read_cb = read_cb;
-	client->wqueue.write_cb = write_cb;
-	client->wqueue.bfd.when = BSC_FD_READ;
-	osmo_wqueue_clear(&client->wqueue);
+	conn->wqueue.read_cb = read_cb;
+	conn->wqueue.write_cb = write_cb;
+	conn->wqueue.bfd.when = BSC_FD_READ;
+	osmo_wqueue_clear(&conn->wqueue);
 
 	fd = osmo_sock_init(AF_INET, SOCK_STREAM, IPPROTO_TCP,
-			    client->srv_ip, client->srv_port, OSMO_SOCK_F_CONNECT);
+			    conn->srv_ip, conn->srv_port, OSMO_SOCK_F_CONNECT);
 	if (fd < 0) {
 		LOGP(DCLIENT, LOGL_ERROR,
 		     "Failed to connect to %s:%d\n",
-		     client->srv_ip, client->srv_port);
-		lost_connection(client);
+		     conn->srv_ip, conn->srv_port);
+		lost_connection(conn);
 		return;
 	}
 
-	client->wqueue.bfd.fd = fd;
-	if (osmo_fd_register(&client->wqueue.bfd) != 0) {
+	conn->wqueue.bfd.fd = fd;
+	if (osmo_fd_register(&conn->wqueue.bfd) != 0) {
 		LOGP(DCLIENT, LOGL_ERROR,
 		     "Failed to register to BFD.\n");
-		lost_connection(client);
+		lost_connection(conn);
 		return;
 	}
 
-	rate_ctr_inc(&client->ctrg->ctr[CLIENT_CTR_CONNECT]);
+	rate_ctr_inc(&conn->client->ctrg->ctr[CLIENT_CTR_CONNECT]);
 
 	/*
 	 * The write queue needs to work differently for GNUtls. Before we can
 	 * send data we will need to complete handshake.
 	 */
-	if (client->tls_on) {
-		if (!osmo_tls_init_client_session(client)) {
-			lost_connection(client);
+	if (conn->tls_on) {
+		if (!osmo_tls_init_client_session(conn)) {
+			lost_connection(conn);
 			return;
 		}
-		client->tls_session.handshake_done = handshake_done_cb;
-		client->tls_session.error = tls_error_cb;
+		conn->tls_session.handshake_done = handshake_done_cb;
+		conn->tls_session.error = tls_error_cb;
 	} else {
-		client->wqueue.bfd.cb = osmo_wqueue_bfd_cb;
-		client->wqueue.bfd.data = client;
-		osmo_client_send_link(client);
+		conn->wqueue.bfd.cb = osmo_wqueue_bfd_cb;
+		conn->wqueue.bfd.data = conn;
+		osmo_client_send_link(conn);
 	}
 }
 
-void osmo_client_reconnect(struct osmo_pcap_client *client)
+void osmo_client_reconnect(struct osmo_pcap_client_conn *client)
 {
 	lost_connection(client);
 }

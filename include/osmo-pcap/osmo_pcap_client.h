@@ -45,22 +45,7 @@ enum {
 	CLIENT_CTR_P_IFDROP,
 };
 
-struct osmo_pcap_client {
-	char *device;
-	pcap_t *handle;
-	char errbuf[PCAP_ERRBUF_SIZE];
-
-	u_int last_ps_recv;
-	u_int last_ps_drop;
-	u_int last_ps_ifdrop;
-	struct osmo_timer_list pcap_stat_timer;
-
-	struct bpf_program bpf;
-	char   *filter_string;
-	int filter_itself;
-	int gprs_filtering;
-	struct osmo_fd fd;
-
+struct osmo_pcap_client_conn {
 	char *srv_ip;
 	int srv_port;
 	struct osmo_wqueue wqueue;
@@ -80,6 +65,28 @@ struct osmo_pcap_client {
 
 	struct osmo_tls_session tls_session;
 
+	/* back pointer */
+	struct osmo_pcap_client *client;
+};
+
+struct osmo_pcap_client {
+	char *device;
+	pcap_t *handle;
+	char errbuf[PCAP_ERRBUF_SIZE];
+
+	u_int last_ps_recv;
+	u_int last_ps_drop;
+	u_int last_ps_ifdrop;
+	struct osmo_timer_list pcap_stat_timer;
+
+	struct bpf_program bpf;
+	char   *filter_string;
+	int filter_itself;
+	int gprs_filtering;
+	struct osmo_fd fd;
+
+	struct osmo_pcap_client_conn conn;
+
 	/* statistics */
 	struct rate_ctr_group *ctrg;
 };
@@ -91,9 +98,9 @@ int vty_client_init(struct osmo_pcap_client *);
 int osmo_client_capture(struct osmo_pcap_client *client, const char *device);
 int osmo_client_filter(struct osmo_pcap_client *client, const char *filter);
 
-void osmo_client_send_data(struct osmo_pcap_client *client,
+void osmo_client_send_data(struct osmo_pcap_client_conn *client,
 			   struct pcap_pkthdr *hdr, const uint8_t *data);
-void osmo_client_send_link(struct osmo_pcap_client *client);
-void osmo_client_connect(struct osmo_pcap_client *);
+void osmo_client_send_link(struct osmo_pcap_client_conn *client);
+void osmo_client_connect(struct osmo_pcap_client_conn *);
 
-void osmo_client_reconnect(struct osmo_pcap_client *);
+void osmo_client_reconnect(struct osmo_pcap_client_conn *);

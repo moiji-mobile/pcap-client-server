@@ -167,7 +167,7 @@ static int pcap_read_cb(struct osmo_fd *fd, unsigned int what)
 	if (!forward_packet(client, &hdr, data))
 		return 0;
 
-	osmo_client_send_data(client, &hdr, data);
+	osmo_client_send_data(&client->conn, &hdr, data);
 	return 0;
 }
 
@@ -315,7 +315,7 @@ int osmo_client_capture(struct osmo_pcap_client *client, const char *device)
 	client->pcap_stat_timer.cb = pcap_check_stats_cb;
 	pcap_check_stats_cb(client);
 
-	osmo_client_send_link(client);
+	osmo_client_send_link(&client->conn);
 
 	if (client->filter_string) {
 		osmo_install_filter(client);

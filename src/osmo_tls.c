@@ -281,7 +281,7 @@ int osmo_tls_client_bfd_cb(struct osmo_fd *fd, unsigned what)
 	return 0;
 }
 
-static int load_keys(struct osmo_pcap_client *client)
+static int load_keys(struct osmo_pcap_client_conn *client)
 {
 	struct osmo_tls_session *sess = &client->tls_session;
 	gnutls_datum_t data;
@@ -443,7 +443,7 @@ bool osmo_tls_init_server_session(struct osmo_pcap_conn *conn,
 	return true;
 }
 
-bool osmo_tls_init_client_session(struct osmo_pcap_client *client)
+bool osmo_tls_init_client_session(struct osmo_pcap_client_conn *client)
 {
 	struct osmo_tls_session *sess = &client->tls_session;
 	struct osmo_wqueue *wq = &client->wqueue;
