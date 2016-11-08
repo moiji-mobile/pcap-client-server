@@ -44,19 +44,19 @@ static void _osmo_client_connect(void *_data)
 	osmo_client_connect((struct osmo_pcap_client_conn *) _data);
 }
 
-static void lost_connection(struct osmo_pcap_client_conn *client)
+static void lost_connection(struct osmo_pcap_client_conn *conn)
 {
-	if (client->wqueue.bfd.fd >= 0) {
-		osmo_tls_release(&client->tls_session);
-		osmo_fd_unregister(&client->wqueue.bfd);
-		close(client->wqueue.bfd.fd);
-		client->wqueue.bfd.fd = -1;
+	if (conn->wqueue.bfd.fd >= 0) {
+		osmo_tls_release(&conn->tls_session);
+		osmo_fd_unregister(&conn->wqueue.bfd);
+		close(conn->wqueue.bfd.fd);
+		conn->wqueue.bfd.fd = -1;
 	}
 
 
-	client->timer.cb = _osmo_client_connect;
-	client->timer.data = client;
-	osmo_timer_schedule(&client->timer, 2, 0);
+	conn->timer.cb = _osmo_client_connect;
+	conn->timer.data = conn;
+	osmo_timer_schedule(&conn->timer, 2, 0);
 }
 
 static void write_data(struct osmo_pcap_client_conn *conn, struct msgb *msg)
@@ -76,9 +76,9 @@ static int read_cb(struct osmo_fd *fd)
 
 	rc = read(fd->fd, buf, sizeof(buf));
 	if (rc <= 0) {
-		struct osmo_pcap_client_conn *client = fd->data;
+		struct osmo_pcap_client_conn *conn = fd->data;
 		LOGP(DCLIENT, LOGL_ERROR, "Lost connection on read.\n");
-		lost_connection(client);
+		lost_connection(conn);
 		return -1;
 	}
 
@@ -104,18 +104,18 @@ static int write_cb(struct osmo_fd *fd, struct msgb *msg)
 
 static void handshake_done_cb(struct osmo_tls_session *session)
 {
-	struct osmo_pcap_client_conn *client;
+	struct osmo_pcap_client_conn *conn;
 
-	client = container_of(session, struct osmo_pcap_client_conn, tls_session);
-	osmo_client_send_link(client);
+	conn = container_of(session, struct osmo_pcap_client_conn, tls_session);
+	osmo_client_send_link(conn);
 }
 
 static void tls_error_cb(struct osmo_tls_session *session)
 {
-	struct osmo_pcap_client_conn *client;
+	struct osmo_pcap_client_conn *conn;
 
-	client = container_of(session, struct osmo_pcap_client_conn, tls_session);
-	lost_connection(client);
+	conn = container_of(session, struct osmo_pcap_client_conn, tls_session);
+	lost_connection(conn);
 }
 
 void osmo_client_send_data(struct osmo_pcap_client_conn *conn,
@@ -235,7 +235,7 @@ void osmo_client_connect(struct osmo_pcap_client_conn *conn)
 	}
 }
 
-void osmo_client_reconnect(struct osmo_pcap_client_conn *client)
+void osmo_client_reconnect(struct osmo_pcap_client_conn *conn)
 {
-	lost_connection(client);
+	lost_connection(conn);
 }

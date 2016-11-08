@@ -281,39 +281,39 @@ int osmo_tls_client_bfd_cb(struct osmo_fd *fd, unsigned what)
 	return 0;
 }
 
-static int load_keys(struct osmo_pcap_client_conn *client)
+static int load_keys(struct osmo_pcap_client_conn *conn)
 {
-	struct osmo_tls_session *sess = &client->tls_session;
+	struct osmo_tls_session *sess = &conn->tls_session;
 	gnutls_datum_t data;
 	int rc;
 
-	if (!client->tls_client_cert || !client->tls_client_key) {
+	if (!conn->tls_client_cert || !conn->tls_client_key) {
 		LOGP(DTLS, LOGL_DEBUG, "Skipping x509 client cert %p %p\n",
-			client->tls_client_cert, client->tls_client_key);
+			conn->tls_client_cert, conn->tls_client_key);
 		return 0;
 	}
 
 
-	rc = gnutls_load_file(client->tls_client_cert, &data);
+	rc = gnutls_load_file(conn->tls_client_cert, &data);
 	if (rc < 0) {
 		LOGP(DTLS, LOGL_ERROR, "Failed to load file=%s rc=%d\n",
-			client->tls_client_cert, rc);
+			conn->tls_client_cert, rc);
 		return -1;
 	}
 	rc = gnutls_pcert_import_x509_raw(&sess->pcert, &data, GNUTLS_X509_FMT_PEM, 0);
 	gnutls_free(data.data);
 	if (rc < 0) {
 		LOGP(DTLS, LOGL_ERROR, "Failed to import file=%s rc=%d\n",
-			client->tls_client_cert, rc);
+			conn->tls_client_cert, rc);
 		return -1;
 	}
 	sess->pcert_alloc = true;
 
 	/* copied to RAM.. nothing we can do about it */
-	rc = gnutls_load_file(client->tls_client_key, &data);
+	rc = gnutls_load_file(conn->tls_client_key, &data);
 	if (rc < 0) {
 		LOGP(DTLS, LOGL_ERROR, "Failed to load file=%s rc=%d\n",
-			client->tls_client_key, rc);
+			conn->tls_client_key, rc);
 		return -1;
 	}
 	gnutls_privkey_init(&sess->privk);
@@ -321,7 +321,7 @@ static int load_keys(struct osmo_pcap_client_conn *client)
 	gnutls_free(data.data);
 	if (rc < 0) {
 		LOGP(DTLS, LOGL_ERROR, "Failed to load file=%s rc=%d\n",
-			client->tls_client_key, rc);
+			conn->tls_client_key, rc);
 		release_keys(sess);
 		return -1;
 	}
