@@ -25,6 +25,7 @@
 #include <inttypes.h>
 #include <pcap.h>
 
+#include <osmocom/core/linuxlist.h>
 #include <osmocom/core/select.h>
 #include <osmocom/core/timer.h>
 #include <osmocom/core/write_queue.h>
@@ -46,6 +47,8 @@ enum {
 };
 
 struct osmo_pcap_client_conn {
+	struct llist_head entry;
+
 	char *srv_ip;
 	int srv_port;
 	struct osmo_wqueue wqueue;
@@ -86,6 +89,7 @@ struct osmo_pcap_client {
 	struct osmo_fd fd;
 
 	struct osmo_pcap_client_conn conn;
+	struct llist_head conns;
 
 	/* statistics */
 	struct rate_ctr_group *ctrg;

@@ -222,6 +222,7 @@ int main(int argc, char **argv)
 	vty_client_init(pcap_client);
 
 	/* initialize the queue */
+	INIT_LLIST_HEAD(&pcap_client->conns);
 	pcap_client->conn.client = pcap_client;
 	osmo_wqueue_init(&pcap_client->conn.wqueue, 10);
 	pcap_client->conn.wqueue.bfd.fd = -1;

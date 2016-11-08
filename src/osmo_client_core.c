@@ -155,6 +155,7 @@ static int forward_packet(
 static int pcap_read_cb(struct osmo_fd *fd, unsigned int what)
 {
 	struct osmo_pcap_client *client = fd->data;
+	struct osmo_pcap_client_conn *conn;
 	struct pcap_pkthdr hdr;
 	const u_char *data;
 
@@ -168,6 +169,8 @@ static int pcap_read_cb(struct osmo_fd *fd, unsigned int what)
 		return 0;
 
 	osmo_client_send_data(&client->conn, &hdr, data);
+	llist_for_each_entry(conn, &client->conns, entry)
+		osmo_client_send_data(conn, &hdr, data);
 	return 0;
 }
 
@@ -272,6 +275,7 @@ static void free_all(struct osmo_pcap_client *client)
 
 int osmo_client_capture(struct osmo_pcap_client *client, const char *device)
 {
+	struct osmo_pcap_client_conn *conn;
 	int fd;
 
 	talloc_free(client->device);
@@ -316,6 +320,8 @@ int osmo_client_capture(struct osmo_pcap_client *client, const char *device)
 	pcap_check_stats_cb(client);
 
 	osmo_client_send_link(&client->conn);
+	llist_for_each_entry(conn, &client->conns, entry)
+		osmo_client_send_link(conn);
 
 	if (client->filter_string) {
 		osmo_install_filter(client);
