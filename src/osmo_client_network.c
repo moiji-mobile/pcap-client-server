@@ -62,7 +62,7 @@ static void lost_connection(struct osmo_pcap_client_conn *conn)
 static void write_data(struct osmo_pcap_client_conn *conn, struct msgb *msg)
 {
 	if (osmo_wqueue_enqueue(&conn->wqueue, msg) != 0) {
-		LOGP(DCLIENT, LOGL_ERROR, "Failed to enqueue.\n");
+		LOGP(DCLIENT, LOGL_ERROR, "Failed to enqueue conn=%s\n", conn->name);
 		rate_ctr_inc(&conn->client->ctrg->ctr[CLIENT_CTR_QERR]);
 		msgb_free(msg);
 		return;
@@ -77,7 +77,8 @@ static int read_cb(struct osmo_fd *fd)
 	rc = read(fd->fd, buf, sizeof(buf));
 	if (rc <= 0) {
 		struct osmo_pcap_client_conn *conn = fd->data;
-		LOGP(DCLIENT, LOGL_ERROR, "Lost connection on read.\n");
+		LOGP(DCLIENT, LOGL_ERROR, "Lost connection on read conn=%s\n",
+			conn->name);
 		lost_connection(conn);
 		return -1;
 	}
@@ -92,8 +93,8 @@ static int write_cb(struct osmo_fd *fd, struct msgb *msg)
 	rc = write(fd->fd, msg->data, msg->len);
 	if (rc < 0) {
 		struct osmo_pcap_client_conn *conn = fd->data;
-		LOGP(DCLIENT, LOGL_ERROR, "Lost connection on write to %s:%d.\n",
-			conn->srv_ip, conn->srv_port);
+		LOGP(DCLIENT, LOGL_ERROR, "Lost connection on write to %s %s:%d.\n",
+			conn->name, conn->srv_ip, conn->srv_port);
 		rate_ctr_inc(&conn->client->ctrg->ctr[CLIENT_CTR_WERR]);
 		lost_connection(conn);
 		return -1;
@@ -235,8 +236,8 @@ void osmo_client_connect(struct osmo_pcap_client_conn *conn)
 				OSMO_SOCK_F_CONNECT | OSMO_SOCK_F_NONBLOCK);
 	if (fd < 0) {
 		LOGP(DCLIENT, LOGL_ERROR,
-		     "Failed to connect to %s:%d\n",
-		     conn->srv_ip, conn->srv_port);
+		     "Failed to connect conn=%s to %s:%d\n",
+		     conn->name, conn->srv_ip, conn->srv_port);
 		lost_connection(conn);
 		return;
 	}
@@ -244,7 +245,7 @@ void osmo_client_connect(struct osmo_pcap_client_conn *conn)
 	conn->wqueue.bfd.fd = fd;
 	if (osmo_fd_register(&conn->wqueue.bfd) != 0) {
 		LOGP(DCLIENT, LOGL_ERROR,
-		     "Failed to register to BFD.\n");
+		     "Failed to register to BFD conn=%s\n", conn->name);
 		lost_connection(conn);
 		return;
 	}

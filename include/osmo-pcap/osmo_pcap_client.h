@@ -48,6 +48,7 @@ enum {
 
 struct osmo_pcap_client_conn {
 	struct llist_head entry;
+	const char *name;
 
 	char *srv_ip;
 	int srv_port;
@@ -108,3 +109,7 @@ void osmo_client_send_link(struct osmo_pcap_client_conn *client);
 void osmo_client_connect(struct osmo_pcap_client_conn *);
 
 void osmo_client_reconnect(struct osmo_pcap_client_conn *);
+
+struct osmo_pcap_client_conn *osmo_client_find_or_create_conn(struct osmo_pcap_client *, const char *name);
+
+void osmo_client_conn_init(struct osmo_pcap_client_conn *conn, struct osmo_pcap_client *client);

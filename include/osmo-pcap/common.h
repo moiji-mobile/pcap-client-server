@@ -1,7 +1,7 @@
 /*
  * osmo-pcap common
  *
- * (C) 2011 by Holger Hans Peter Freyther <zecke@selfish.org>
+ * (C) 2011-2016 by Holger Hans Peter Freyther
  * (C) 2011 by On-Waves
  * All Rights Reserved
  *
@@ -41,6 +41,7 @@ enum {
 enum {
 	CLIENT_NODE = _LAST_OSMOVTY_NODE + 1,
 	SERVER_NODE,
+	CLIENT_SERVER_NODE,
 };
 
 extern const struct log_info log_info;

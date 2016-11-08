@@ -77,6 +77,10 @@ int osmopcap_go_parent(struct vty *vty)
 		vty->node = CONFIG_NODE;
 		vty->index = NULL;
 		break;
+	case CLIENT_SERVER_NODE:
+		vty->node = CLIENT_NODE;
+		vty->index = NULL;
+		break;
 	default:
 		vty->node = CONFIG_NODE;
 		break;

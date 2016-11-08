@@ -31,9 +31,22 @@
 #define PCAP_STRING	"PCAP related functions\n"
 #define SERVER_STRING	"Server string\n"
 
+static struct osmo_pcap_client_conn *get_conn(struct vty *vty)
+{
+	if (vty->node == CLIENT_NODE)
+		return &pcap_client->conn;
+	return vty->index;
+}
+
 static struct cmd_node client_node = {
 	CLIENT_NODE,
 	"%s(client)#",
+	1,
+};
+
+static struct cmd_node server_node = {
+	CLIENT_SERVER_NODE,
+	"%s(server)#",
 	1,
 };
 
@@ -43,6 +56,52 @@ DEFUN(cfg_client,
       "Enter the client configuration\n")
 {
 	vty->node = CLIENT_NODE;
+	return CMD_SUCCESS;
+}
+
+static void write_client_conn_data(
+			struct vty *vty,
+			struct osmo_pcap_client_conn *conn,
+			const char *indent)
+{
+	if (conn->tls_on) {
+		vty_out(vty, "%s enable tls%s", indent, VTY_NEWLINE);
+		vty_out(vty, "%s tls hostname %s%s", indent, conn->tls_hostname, VTY_NEWLINE);
+		vty_out(vty, "%s %stls verify-cert%s", indent,
+				conn->tls_verify ? "" : "no ", VTY_NEWLINE);
+		if (conn->tls_capath)
+			vty_out(vty, "%s tls capath %s%s", indent, conn->tls_capath, VTY_NEWLINE);
+		if (conn->tls_client_cert)
+			vty_out(vty, "%s tls client-cert %s%s", indent,
+					conn->tls_client_cert, VTY_NEWLINE);
+		if (conn->tls_client_key)
+			vty_out(vty, "%s tls client-key %s%s", indent,
+					conn->tls_client_key, VTY_NEWLINE);
+		if (conn->tls_priority)
+			vty_out(vty, "%s tls priority %s%s", indent,
+					conn->tls_priority, VTY_NEWLINE);
+		vty_out(vty, "%s tls log-level %d%s", indent,
+			conn->tls_log_level, VTY_NEWLINE);
+	}
+
+	if (conn->srv_ip)
+		vty_out(vty, "%s server ip %s%s", indent,
+			conn->srv_ip, VTY_NEWLINE);
+
+	if (conn->srv_port > 0)
+		vty_out(vty, "%s server port %d%s", indent,
+			conn->srv_port, VTY_NEWLINE);
+}
+
+static int config_write_server(struct vty *vty)
+{
+	struct osmo_pcap_client_conn *conn;
+
+	llist_for_each_entry(conn, &pcap_client->conns, entry) {
+		vty_out(vty, " pcap-store-connection %s%s", conn->name, VTY_NEWLINE);
+		write_client_conn_data(vty, conn, " ");
+		vty_out(vty, "  connect%s", VTY_NEWLINE);
+	}
 	return CMD_SUCCESS;
 }
 
@@ -62,34 +121,8 @@ static int config_write_client(struct vty *vty)
 	if (pcap_client->gprs_filtering)
 		vty_out(vty, " pcap add-filter gprs%s", VTY_NEWLINE);
 
-	if (pcap_client->conn.tls_on) {
-		vty_out(vty, " enable tls%s", VTY_NEWLINE);
-		vty_out(vty, " tls hostname %s%s", pcap_client->conn.tls_hostname, VTY_NEWLINE);
-		vty_out(vty, " %stls verify-cert%s",
-				pcap_client->conn.tls_verify ? "" : "no ", VTY_NEWLINE);
-		if (pcap_client->conn.tls_capath)
-			vty_out(vty, " tls capath %s%s", pcap_client->conn.tls_capath, VTY_NEWLINE);
-		if (pcap_client->conn.tls_client_cert)
-			vty_out(vty, " tls client-cert %s%s",
-					pcap_client->conn.tls_client_cert, VTY_NEWLINE);
-		if (pcap_client->conn.tls_client_key)
-			vty_out(vty, " tls client-key %s%s",
-					pcap_client->conn.tls_client_key, VTY_NEWLINE);
-		if (pcap_client->conn.tls_priority)
-			vty_out(vty, " tls priority %s%s",
-					pcap_client->conn.tls_priority, VTY_NEWLINE);
-		vty_out(vty, " tls log-level %d%s",
-			pcap_client->conn.tls_log_level, VTY_NEWLINE);
-	}
 
-	if (pcap_client->conn.srv_ip)
-		vty_out(vty, " server ip %s%s",
-			pcap_client->conn.srv_ip, VTY_NEWLINE);
-
-	if (pcap_client->conn.srv_port > 0)
-		vty_out(vty, " server port %d%s",
-			pcap_client->conn.srv_port, VTY_NEWLINE);
-
+	write_client_conn_data(vty, &pcap_client->conn, "");
 	return CMD_SUCCESS;
 }
 
@@ -159,12 +192,14 @@ DEFUN(cfg_enable_tls,
       "enable tls",
       "Enable\n" "Transport Layer Security\n")
 {
-	if (!pcap_client->conn.tls_on) {
-		if (pcap_client->conn.wqueue.bfd.fd >= 0)
-			osmo_client_reconnect(&pcap_client->conn);
+	struct osmo_pcap_client_conn *conn = get_conn(vty);
+
+	if (!conn->tls_on) {
+		if (conn->wqueue.bfd.fd >= 0)
+			osmo_client_reconnect(conn);
 	}
 
-	pcap_client->conn.tls_on = true;
+	conn->tls_on = true;
 	return CMD_SUCCESS;
 }
 
@@ -173,10 +208,12 @@ DEFUN(cfg_disable_tls,
       "disable tls",
       "Disable\n" "Transport Layer Security\n")
 {
-	if (pcap_client->conn.tls_on)
-		osmo_client_reconnect(&pcap_client->conn);
+	struct osmo_pcap_client_conn *conn = get_conn(vty);
 
-	pcap_client->conn.tls_on = false;
+	if (conn->tls_on)
+		osmo_client_reconnect(conn);
+
+	conn->tls_on = false;
 	return CMD_SUCCESS;
 }
 
@@ -185,8 +222,10 @@ DEFUN(cfg_tls_hostname,
       "tls hostname NAME",
       TLS_STR "hostname for certificate validation\n" "name\n")
 {
-	talloc_free(pcap_client->conn.tls_hostname);
-	pcap_client->conn.tls_hostname = talloc_strdup(pcap_client, argv[0]);
+	struct osmo_pcap_client_conn *conn = get_conn(vty);
+
+	talloc_free(conn->tls_hostname);
+	conn->tls_hostname = talloc_strdup(pcap_client, argv[0]);
 	return CMD_SUCCESS;
 }
 
@@ -195,8 +234,10 @@ DEFUN(cfg_no_tls_hostname,
       "no tls hostname",
       NO_STR TLS_STR "hostname for certificate validation\n")
 {
-	talloc_free(pcap_client->conn.tls_hostname);
-	pcap_client->conn.tls_hostname = NULL;
+	struct osmo_pcap_client_conn *conn = get_conn(vty);
+
+	talloc_free(conn->tls_hostname);
+	conn->tls_hostname = NULL;
 	return CMD_SUCCESS;
 }
 
@@ -205,7 +246,9 @@ DEFUN(cfg_tls_verify,
       "tls verify-cert",
       TLS_STR "Verify certificates\n")
 {
-	pcap_client->conn.tls_verify = true;
+	struct osmo_pcap_client_conn *conn = get_conn(vty);
+
+	conn->tls_verify = true;
 	return CMD_SUCCESS;
 }
 
@@ -214,7 +257,9 @@ DEFUN(cfg_no_tls_verify,
       "no tls verify-cert",
       NO_STR TLS_STR "Verify certificates\n")
 {
-	pcap_client->conn.tls_verify = false;
+	struct osmo_pcap_client_conn *conn = get_conn(vty);
+
+	conn->tls_verify = false;
 	return CMD_SUCCESS;
 }
 
@@ -223,8 +268,10 @@ DEFUN(cfg_tls_capath,
       "tls capath .PATH",
       TLS_STR "Trusted root certificates\n" "Filename\n")
 {
-	talloc_free(pcap_client->conn.tls_capath);
-	pcap_client->conn.tls_capath = talloc_strdup(pcap_client, argv[0]);
+	struct osmo_pcap_client_conn *conn = get_conn(vty);
+
+	talloc_free(conn->tls_capath);
+	conn->tls_capath = talloc_strdup(pcap_client, argv[0]);
 	return CMD_SUCCESS;
 }
 
@@ -233,8 +280,10 @@ DEFUN(cfg_no_tls_capath,
       "no tls capath",
       NO_STR TLS_STR "Trusted root certificates\n")
 {
-	talloc_free(pcap_client->conn.tls_capath);
-	pcap_client->conn.tls_capath = NULL;
+	struct osmo_pcap_client_conn *conn = get_conn(vty);
+
+	talloc_free(conn->tls_capath);
+	conn->tls_capath = NULL;
 	return CMD_SUCCESS;
 }
 
@@ -243,8 +292,10 @@ DEFUN(cfg_tls_client_cert,
       "tls client-cert .PATH",
       TLS_STR "Client certificate for authentication\n" "Filename\n")
 {
-	talloc_free(pcap_client->conn.tls_client_cert);
-	pcap_client->conn.tls_client_cert = talloc_strdup(pcap_client, argv[0]);
+	struct osmo_pcap_client_conn *conn = get_conn(vty);
+
+	talloc_free(conn->tls_client_cert);
+	conn->tls_client_cert = talloc_strdup(pcap_client, argv[0]);
 	return CMD_SUCCESS;
 }
 
@@ -253,8 +304,10 @@ DEFUN(cfg_no_tls_client_cert,
       "no tls client-cert",
       NO_STR TLS_STR "Client certificate for authentication\n")
 {
-	talloc_free(pcap_client->conn.tls_client_cert);
-	pcap_client->conn.tls_client_cert = NULL;
+	struct osmo_pcap_client_conn *conn = get_conn(vty);
+
+	talloc_free(conn->tls_client_cert);
+	conn->tls_client_cert = NULL;
 	return CMD_SUCCESS;
 }
 
@@ -263,8 +316,10 @@ DEFUN(cfg_tls_client_key,
       "tls client-key .PATH",
       TLS_STR "Client private key\n" "Filename\n")
 {
-	talloc_free(pcap_client->conn.tls_client_key);
-	pcap_client->conn.tls_client_key = talloc_strdup(pcap_client, argv[0]);
+	struct osmo_pcap_client_conn *conn = get_conn(vty);
+
+	talloc_free(conn->tls_client_key);
+	conn->tls_client_key = talloc_strdup(pcap_client, argv[0]);
 	return CMD_SUCCESS;
 }
 
@@ -273,8 +328,10 @@ DEFUN(cfg_no_tls_client_key,
       "no tls client-key",
       NO_STR TLS_STR "Client private key\n")
 {
-	talloc_free(pcap_client->conn.tls_client_key);
-	pcap_client->conn.tls_client_key = NULL;
+	struct osmo_pcap_client_conn *conn = get_conn(vty);
+
+	talloc_free(conn->tls_client_key);
+	conn->tls_client_key = NULL;
 	return CMD_SUCCESS;
 }
 
@@ -283,8 +340,10 @@ DEFUN(cfg_tls_priority,
       "tls priority STR",
       TLS_STR "Priority string for GNUtls\n" "Priority string\n")
 {
-	talloc_free(pcap_client->conn.tls_priority);
-	pcap_client->conn.tls_priority = talloc_strdup(pcap_client, argv[0]);
+	struct osmo_pcap_client_conn *conn = get_conn(vty);
+
+	talloc_free(conn->tls_priority);
+	conn->tls_priority = talloc_strdup(pcap_client, argv[0]);
 	return CMD_SUCCESS;
 }
 
@@ -293,8 +352,10 @@ DEFUN(cfg_no_tls_priority,
       "no tls priority",
       NO_STR TLS_STR "Priority string for GNUtls\n")
 {
-	talloc_free(pcap_client->conn.tls_priority);
-	pcap_client->conn.tls_priority = NULL;
+	struct osmo_pcap_client_conn *conn = get_conn(vty);
+
+	talloc_free(conn->tls_priority);
+	conn->tls_priority = NULL;
 	return CMD_SUCCESS;
 }
 
@@ -303,7 +364,9 @@ DEFUN(cfg_tls_log_level,
       "tls log-level <0-255>",
       TLS_STR "Log-level\n" "GNUtls debug level\n")
 {
-	pcap_client->conn.tls_log_level = atoi(argv[0]);
+	struct osmo_pcap_client_conn *conn = get_conn(vty);
+
+	conn->tls_log_level = atoi(argv[0]);
 	return CMD_SUCCESS;
 }
 
@@ -312,8 +375,10 @@ DEFUN(cfg_server_ip,
       "server ip A.B.C.D",
       SERVER_STRING "IP Address of the server\n" "IP\n")
 {
-	talloc_free(pcap_client->conn.srv_ip);
-	pcap_client->conn.srv_ip = talloc_strdup(pcap_client, argv[0]);
+	struct osmo_pcap_client_conn *conn = get_conn(vty);
+
+	talloc_free(conn->srv_ip);
+	conn->srv_ip = talloc_strdup(pcap_client, argv[0]);
 	return CMD_SUCCESS;
 }
 
@@ -322,16 +387,49 @@ DEFUN(cfg_server_port,
       "server port <1-65535>",
       SERVER_STRING "Port\n" "Number\n")
 {
-	pcap_client->conn.srv_port = atoi(argv[0]);
+	struct osmo_pcap_client_conn *conn = get_conn(vty);
+
+	conn->srv_port = atoi(argv[0]);
 	return CMD_SUCCESS;
 }
 
+DEFUN(cfg_pcap_store,
+      cfg_pcap_store_cmd,
+      "pcap-store-connection .NAME",
+      "Configure additional PCAP store server\n" "Name of server\n")
+{
+	struct osmo_pcap_client_conn *conn;
+	conn = osmo_client_find_or_create_conn(pcap_client, argv[0]);
+	if (!conn) {
+		vty_out(vty, "%%Failed to find/create conection %s%s",
+			argv[0], VTY_NEWLINE);
+		return CMD_WARNING;
+	}
+
+	vty->index = conn;
+	vty->node = CLIENT_SERVER_NODE;
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_client_connect,
+      cfg_client_connect_cmd,
+      "connect",
+      "Connect to the storage\n")
+{
+	struct osmo_pcap_client_conn *conn = get_conn(vty);
+
+	osmo_client_connect(conn);
+	return CMD_SUCCESS;
+}
 
 int vty_client_init(struct osmo_pcap_client *pcap)
 {
 	install_element(CONFIG_NODE, &cfg_client_cmd);
 	install_node(&client_node, config_write_client);
 	install_default(CLIENT_NODE);
+
+	install_node(&server_node, config_write_server);
+	install_default(CLIENT_SERVER_NODE);
 
 	install_element(CLIENT_NODE, &cfg_client_device_cmd);
 	install_element(CLIENT_NODE, &cfg_client_filter_cmd);
@@ -358,6 +456,28 @@ int vty_client_init(struct osmo_pcap_client *pcap)
 
 	install_element(CLIENT_NODE, &cfg_client_add_gprs_cmd);
 	install_element(CLIENT_NODE, &cfg_client_del_gprs_cmd);
+
+
+	/* per server confiug*/
+	install_element(CLIENT_NODE, &cfg_pcap_store_cmd);
+	install_element(CLIENT_SERVER_NODE, &cfg_server_ip_cmd);
+	install_element(CLIENT_SERVER_NODE, &cfg_server_port_cmd);
+	install_element(CLIENT_SERVER_NODE, &cfg_enable_tls_cmd);
+	install_element(CLIENT_SERVER_NODE, &cfg_disable_tls_cmd);
+	install_element(CLIENT_SERVER_NODE, &cfg_tls_hostname_cmd);
+	install_element(CLIENT_SERVER_NODE, &cfg_no_tls_hostname_cmd);
+	install_element(CLIENT_SERVER_NODE, &cfg_tls_verify_cmd);
+	install_element(CLIENT_SERVER_NODE, &cfg_no_tls_verify_cmd);
+	install_element(CLIENT_SERVER_NODE, &cfg_tls_capath_cmd);
+	install_element(CLIENT_SERVER_NODE, &cfg_no_tls_capath_cmd);
+	install_element(CLIENT_SERVER_NODE, &cfg_tls_client_cert_cmd);
+	install_element(CLIENT_SERVER_NODE, &cfg_no_tls_client_cert_cmd);
+	install_element(CLIENT_SERVER_NODE, &cfg_tls_client_key_cmd);
+	install_element(CLIENT_SERVER_NODE, &cfg_no_tls_client_key_cmd);
+	install_element(CLIENT_SERVER_NODE, &cfg_tls_priority_cmd);
+	install_element(CLIENT_SERVER_NODE, &cfg_no_tls_priority_cmd);
+	install_element(CLIENT_SERVER_NODE, &cfg_tls_log_level_cmd);
+	install_element(CLIENT_SERVER_NODE, &cfg_client_connect_cmd);
 
 	return 0;
 }

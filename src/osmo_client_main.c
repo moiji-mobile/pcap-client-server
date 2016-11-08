@@ -218,14 +218,12 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 	pcap_client->fd.fd = -1;
-	pcap_client->conn.tls_verify = true;
 	vty_client_init(pcap_client);
 
 	/* initialize the queue */
 	INIT_LLIST_HEAD(&pcap_client->conns);
-	pcap_client->conn.client = pcap_client;
-	osmo_wqueue_init(&pcap_client->conn.wqueue, 10);
-	pcap_client->conn.wqueue.bfd.fd = -1;
+	osmo_client_conn_init(&pcap_client->conn, pcap_client);
+	pcap_client->conn.name = "default";
 
 	/* initialize the stats interface */
 	pcap_client->ctrg = rate_ctr_group_alloc(pcap_client, &pcap_client_ctr_group_desc, 0);

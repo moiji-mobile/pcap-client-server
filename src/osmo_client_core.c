@@ -336,3 +336,39 @@ int osmo_client_filter(struct osmo_pcap_client *client, const char *filter)
 	client->filter_string = talloc_strdup(client, filter);
 	return osmo_install_filter(client);
 }
+
+void osmo_client_conn_init(struct osmo_pcap_client_conn *conn,
+				struct osmo_pcap_client *client)
+{
+	conn->client = client;
+	conn->tls_verify = true;
+	osmo_wqueue_init(&conn->wqueue, 10);
+	conn->wqueue.bfd.fd = -1;
+}
+
+struct osmo_pcap_client_conn *osmo_client_find_or_create_conn(
+				struct osmo_pcap_client *client,
+				const char *name)
+{
+	struct osmo_pcap_client_conn *conn;
+
+	llist_for_each_entry(conn, &client->conns, entry)
+		if (strcmp(conn->name, name) == 0)
+			return conn;
+
+	conn = talloc_zero(client, struct osmo_pcap_client_conn);
+	if (!conn) {
+		LOGP(DCLIENT, LOGL_ERROR, "Failed to allocate conn for %s\n", name);
+		return NULL;
+	}
+	conn->name = talloc_strdup(conn, name);
+	if (!conn->name) {
+		LOGP(DCLIENT, LOGL_ERROR, "Failed to allocate name for %s\n", name);
+		talloc_free(conn);
+		return NULL;
+	}
+
+	osmo_client_conn_init(conn, client);
+	llist_add_tail(&conn->entry, &client->conns);
+	return conn;
+}
