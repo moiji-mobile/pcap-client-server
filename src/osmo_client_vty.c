@@ -411,6 +411,23 @@ DEFUN(cfg_pcap_store,
 	return CMD_SUCCESS;
 }
 
+DEFUN(cfg_no_pcap_store,
+      cfg_no_pcap_store_cmd,
+      "no pcap-store-connection .NAME",
+      NO_STR "Configure additional PCAP store server\n" "Name of server\n")
+{
+	struct osmo_pcap_client_conn *conn;
+	conn = osmo_client_find_conn(pcap_client, argv[0]);
+	if (!conn) {
+		vty_out(vty, "%%Failed to find connection %s%ss",
+			argv[0], VTY_NEWLINE);
+		return CMD_WARNING;
+	}
+
+	osmo_client_free(conn);
+	return CMD_SUCCESS;
+}
+
 DEFUN(cfg_client_connect,
       cfg_client_connect_cmd,
       "connect",
@@ -419,6 +436,17 @@ DEFUN(cfg_client_connect,
 	struct osmo_pcap_client_conn *conn = get_conn(vty);
 
 	osmo_client_connect(conn);
+	return CMD_SUCCESS;
+}
+
+DEFUN(cfg_client_disconnect,
+      cfg_client_disconnect_cmd,
+      "disconnect",
+      "Disconnect to the storage\n")
+{
+	struct osmo_pcap_client_conn *conn = get_conn(vty);
+
+	osmo_client_disconnect(conn);
 	return CMD_SUCCESS;
 }
 
@@ -460,6 +488,7 @@ int vty_client_init(struct osmo_pcap_client *pcap)
 
 	/* per server confiug*/
 	install_element(CLIENT_NODE, &cfg_pcap_store_cmd);
+	install_element(CLIENT_NODE, &cfg_no_pcap_store_cmd);
 	install_element(CLIENT_SERVER_NODE, &cfg_server_ip_cmd);
 	install_element(CLIENT_SERVER_NODE, &cfg_server_port_cmd);
 	install_element(CLIENT_SERVER_NODE, &cfg_enable_tls_cmd);
@@ -478,6 +507,7 @@ int vty_client_init(struct osmo_pcap_client *pcap)
 	install_element(CLIENT_SERVER_NODE, &cfg_no_tls_priority_cmd);
 	install_element(CLIENT_SERVER_NODE, &cfg_tls_log_level_cmd);
 	install_element(CLIENT_SERVER_NODE, &cfg_client_connect_cmd);
+	install_element(CLIENT_SERVER_NODE, &cfg_client_disconnect_cmd);
 
 	return 0;
 }

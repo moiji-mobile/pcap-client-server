@@ -46,13 +46,7 @@ static void _osmo_client_connect(void *_data)
 
 static void lost_connection(struct osmo_pcap_client_conn *conn)
 {
-	if (conn->wqueue.bfd.fd >= 0) {
-		osmo_tls_release(&conn->tls_session);
-		osmo_fd_unregister(&conn->wqueue.bfd);
-		close(conn->wqueue.bfd.fd);
-		conn->wqueue.bfd.fd = -1;
-	}
-
+	osmo_client_disconnect(conn);
 
 	conn->timer.cb = _osmo_client_connect;
 	conn->timer.data = conn;
@@ -259,4 +253,16 @@ void osmo_client_connect(struct osmo_pcap_client_conn *conn)
 void osmo_client_reconnect(struct osmo_pcap_client_conn *conn)
 {
 	lost_connection(conn);
+}
+
+void osmo_client_disconnect(struct osmo_pcap_client_conn *conn)
+{
+	if (conn->wqueue.bfd.fd >= 0) {
+		osmo_tls_release(&conn->tls_session);
+		osmo_fd_unregister(&conn->wqueue.bfd);
+		close(conn->wqueue.bfd.fd);
+		conn->wqueue.bfd.fd = -1;
+	}
+
+	osmo_timer_del(&conn->timer);
 }

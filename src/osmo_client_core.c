@@ -346,7 +346,15 @@ void osmo_client_conn_init(struct osmo_pcap_client_conn *conn,
 	conn->wqueue.bfd.fd = -1;
 }
 
-struct osmo_pcap_client_conn *osmo_client_find_or_create_conn(
+
+void osmo_client_free(struct osmo_pcap_client_conn *conn)
+{
+	osmo_client_disconnect(conn);
+	llist_del(&conn->entry);
+	talloc_free(conn);
+}
+
+struct osmo_pcap_client_conn *osmo_client_find_conn(
 				struct osmo_pcap_client *client,
 				const char *name)
 {
@@ -355,6 +363,18 @@ struct osmo_pcap_client_conn *osmo_client_find_or_create_conn(
 	llist_for_each_entry(conn, &client->conns, entry)
 		if (strcmp(conn->name, name) == 0)
 			return conn;
+
+	return NULL;
+}
+
+struct osmo_pcap_client_conn *osmo_client_find_or_create_conn(
+				struct osmo_pcap_client *client,
+				const char *name)
+{
+	struct osmo_pcap_client_conn *conn = osmo_client_find_conn(client, name);;
+
+	if (conn)
+		return conn;
 
 	conn = talloc_zero(client, struct osmo_pcap_client_conn);
 	if (!conn) {
