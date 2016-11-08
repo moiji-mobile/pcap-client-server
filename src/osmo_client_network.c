@@ -220,6 +220,8 @@ void osmo_client_connect(struct osmo_pcap_client_conn *conn)
 {
 	int fd;
 
+	osmo_client_disconnect(conn);
+
 	conn->wqueue.read_cb = read_cb;
 	conn->wqueue.write_cb = write_cb;
 	conn->wqueue.bfd.when = BSC_FD_READ;
