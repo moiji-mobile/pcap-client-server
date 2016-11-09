@@ -1,3 +1,13 @@
+osmo-pcap (0.0.10) unstable; urgency=medium
+
+  * New release with new features
+  * Allow unauthenticated TLS between client and server
+  * Allow a client to connect to multiple servers at the
+    same time.
+  * Allow the server to forward data through ZeroMQ
+
+ -- Holger Hans Peter Freyther <holger@moiji-mobile.com>  Wed, 09 Nov 2016 02:09:52 +0100
+
 osmo-pcap (0.0.9) unstable; urgency=medium
 
   * Fix pcap packet format for 64bit clients. 
