@@ -193,6 +193,12 @@ void osmo_client_send_link(struct osmo_pcap_client_conn *conn)
 	struct osmo_pcap_data *om_hdr;
 	struct msgb *msg;
 
+	if (!conn->client->handle) {
+		LOGP(DCLIENT, LOGL_ERROR,
+			"No pcap_handle not sending link info to conn=%s\n", conn->name);
+		return;
+	}
+
 	msg = msgb_alloc(9000 + sizeof(*om_hdr) + sizeof(*hdr), "link-data");
 	if (!msg) {
 		LOGP(DCLIENT, LOGL_ERROR, "Failed to allocate data.\n");
