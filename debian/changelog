@@ -1,3 +1,9 @@
+osmo-pcap (0.0.11) UNRELEASED; urgency=medium
+
+  * Add "source ip A.B.C.D" option to use specific address.
+
+ -- Holger Hans Peter Freyther <holger@moiji-mobile.com>  Tue, 17 Jan 2017 09:12:52 +0100
+
 osmo-pcap (0.0.10) unstable; urgency=medium
 
   * New release with new features
