@@ -91,6 +91,9 @@ static void write_client_conn_data(
 	if (conn->srv_port > 0)
 		vty_out(vty, "%s server port %d%s", indent,
 			conn->srv_port, VTY_NEWLINE);
+	if (conn->source_ip)
+		vty_out(vty, "%s source ip %s%s", indent,
+			conn->source_ip, VTY_NEWLINE);
 }
 
 static int config_write_server(struct vty *vty)
@@ -393,6 +396,19 @@ DEFUN(cfg_server_port,
 	return CMD_SUCCESS;
 }
 
+DEFUN(cfg_source_ip,
+      cfg_source_ip_cmd,
+      "source ip A.B.C.D",
+      SERVER_STRING "Source IP Address\n" "IP\n")
+{
+	struct osmo_pcap_client_conn *conn = get_conn(vty);
+
+	talloc_free(conn->source_ip);
+	conn->source_ip = talloc_strdup(pcap_client, argv[0]);
+	return CMD_SUCCESS;
+}
+
+
 DEFUN(cfg_pcap_store,
       cfg_pcap_store_cmd,
       "pcap-store-connection .NAME",
@@ -465,6 +481,7 @@ int vty_client_init(struct osmo_pcap_client *pcap)
 
 	install_element(CLIENT_NODE, &cfg_server_ip_cmd);
 	install_element(CLIENT_NODE, &cfg_server_port_cmd);
+	install_element(CLIENT_NODE, &cfg_source_ip_cmd);
 
 	install_element(CLIENT_NODE, &cfg_enable_tls_cmd);
 	install_element(CLIENT_NODE, &cfg_disable_tls_cmd);
@@ -491,6 +508,7 @@ int vty_client_init(struct osmo_pcap_client *pcap)
 	install_element(CLIENT_NODE, &cfg_no_pcap_store_cmd);
 	install_element(CLIENT_SERVER_NODE, &cfg_server_ip_cmd);
 	install_element(CLIENT_SERVER_NODE, &cfg_server_port_cmd);
+	install_element(CLIENT_SERVER_NODE, &cfg_source_ip_cmd);
 	install_element(CLIENT_SERVER_NODE, &cfg_enable_tls_cmd);
 	install_element(CLIENT_SERVER_NODE, &cfg_disable_tls_cmd);
 	install_element(CLIENT_SERVER_NODE, &cfg_tls_hostname_cmd);

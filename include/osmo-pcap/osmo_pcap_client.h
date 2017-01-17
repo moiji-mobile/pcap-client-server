@@ -52,6 +52,7 @@ struct osmo_pcap_client_conn {
 
 	char *srv_ip;
 	int srv_port;
+	char *source_ip;
 	struct osmo_wqueue wqueue;
 	struct osmo_timer_list timer;
 
