@@ -17,3 +17,13 @@ Package: osmo-pcap-server
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Collect traces from other systems.
+
+Package: osmo-pcap-client-dbg
+Architecture: any
+Depends: osmo-pcap-client (= ${binary:Version})
+Description: Debug symbols of osmo-pcap-client-dbg
+
+Package: osmo-pcap-server-dbg
+Architecture: any
+Depends: osmo-pcap-server (= ${binary:Version})
+Description: Debug symbols of osmo-pcap-server-dbg
